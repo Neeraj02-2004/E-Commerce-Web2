@@ -1,0 +1,29 @@
+package com.neeraj.SpringEcom.model.dto;
+
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
+
+import java.util.List;
+
+public record OrderRequest(
+
+        @NotBlank(message = "Customer name is required")
+        @Size(min = 2, max = 80, message = "Customer name must be between 2 and 80 characters")
+        String customerName,
+
+        @NotBlank(message = "Email is required")
+        @Email(message = "Email must be valid")
+        String email,
+
+        @NotBlank(message = "Mobile number is required")
+        @Pattern(regexp = "^[6-9]\\d{9}$", message = "Mobile number must be a valid 10 digit Indian number")
+        String mobileNo,
+
+        @NotEmpty(message = "Order must contain at least one item")
+        List<@Valid OrderItemRequest> items
+) {
+}

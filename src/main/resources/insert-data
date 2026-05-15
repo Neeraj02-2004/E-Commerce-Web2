@@ -1,0 +1,18 @@
+INSERT INTO product
+(name, description, brand, price, category, release_date, product_available, stock_quantity, image_name, image_type, image_data)
+VALUES
+('iPhone 14', 'Latest Apple smartphone', 'Apple', 79999, 'Mobile', '2023-09-10', true, 10, 'iphone.jpg', 'image/jpeg', NULL),
+
+('Galaxy S23', 'Samsung flagship phone', 'Samsung', 74999, 'Mobile', '2023-08-15', true, 15, 'samsung.jpg', 'image/jpeg', NULL),
+
+('Dell XPS 13', 'Premium ultrabook laptop', 'Dell', 99999, 'Laptop', '2023-07-20', true, 5, 'dell.jpg', 'image/jpeg', NULL),
+
+('Sony WH-1000XM5', 'Noise cancelling headphones', 'Sony', 29999, 'Headphone', '2023-06-18', true, 20, 'sony.jpg', 'image/jpeg', NULL),
+
+('Boat Rockerz 450', 'Affordable headphones', 'Boat', 1499, 'Headphone', '2022-05-10', true, 50, 'boat.jpg', 'image/jpeg', NULL),
+
+('HP Pavilion', 'Gaming laptop', 'HP', 85000, 'Laptop', '2023-03-25', true, 8, 'hp.jpg', 'image/jpeg', NULL),
+
+('Nike Air Max', 'Running shoes', 'Nike', 6999, 'Fashion', '2022-11-11', true, 25, 'nike.jpg', 'image/jpeg', NULL),
+
+('Toy Car', 'Kids toy car', 'Funskool', 499, 'Toys', '2021-12-01', true, 100, 'toy.jpg', 'image/jpeg', NULL);
