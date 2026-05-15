@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import GoogleLogin from "./GoogleLogin";
@@ -6,8 +5,46 @@ import GoogleLogin from "./GoogleLogin";
 function Login({ onLogin }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [popup, setPopup] = useState({
+    show: false,
+    message: "",
+    type: "success",
+  });
 
   const navigate = useNavigate();
+
+  const showPopup = (message, type = "success") => {
+    setPopup({
+      show: true,
+      message,
+      type,
+    });
+
+    setTimeout(() => {
+      setPopup({
+        show: false,
+        message: "",
+        type: "success",
+      });
+    }, 2500);
+  };
+
+  const saveLoginData = (data) => {
+    localStorage.setItem("token", data.token);
+    localStorage.setItem("role", data.role || "USER");
+    localStorage.setItem("username", data.username || data.name || "User");
+    localStorage.setItem("email", data.email || email);
+
+    if (onLogin) {
+      onLogin(data.token);
+    }
+
+    showPopup("Login successful", "success");
+
+    setTimeout(() => {
+      navigate("/");
+    }, 900);
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -19,22 +56,29 @@ function Login({ onLogin }) {
         body: JSON.stringify({ email, password }),
       });
 
-      if (!res.ok) throw new Error("Invalid credentials");
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText || "Invalid credentials");
+      }
 
       const data = await res.json();
-
-      localStorage.setItem("token", data.token);
-      onLogin(data.token);
-
-      navigate("/");
-
+      saveLoginData(data);
     } catch (err) {
-      alert(err.message);
+      showPopup(err.message || "Login failed", "error");
     }
   };
 
   return (
     <div style={styles.container}>
+      {popup.show && (
+        <div style={popupStyle(popup.type)}>
+          <div style={popupIconStyle}>
+            {popup.type === "success" ? "✓" : "!"}
+          </div>
+          <div>{popup.message}</div>
+        </div>
+      )}
+
       <div style={styles.card}>
         <h2 style={styles.title}>Welcome Back</h2>
 
@@ -45,6 +89,7 @@ function Login({ onLogin }) {
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            required
           />
 
           <input
@@ -53,6 +98,7 @@ function Login({ onLogin }) {
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            required
           />
 
           <button style={styles.button} type="submit">
@@ -60,7 +106,6 @@ function Login({ onLogin }) {
           </button>
         </form>
 
-        {/* 🔥 NEW SIGNUP BUTTON */}
         <button
           style={styles.signupButton}
           onClick={() => navigate("/register")}
@@ -72,10 +117,8 @@ function Login({ onLogin }) {
 
         <div style={styles.googleBox}>
           <GoogleLogin
-            onSuccess={(token) => {
-              localStorage.setItem("token", token);
-              onLogin(token);
-              navigate("/");
+            onSuccess={(data) => {
+              saveLoginData(data);
             }}
             onFailure={(err) => console.error(err)}
           />
@@ -125,23 +168,20 @@ const styles = {
     fontWeight: "bold",
     cursor: "pointer",
   },
-
-  // 🔥 NEW BUTTON STYLE
-signupButton: {
-  marginTop: "12px",
-  padding: "12px",
-  width: "100%",
-  borderRadius: "10px",
-  border: "none",
-  background: "linear-gradient(135deg, #ff6a00, #ee0979)",
-  color: "#fff",
-  fontWeight: "bold",
-  fontSize: "14px",
-  cursor: "pointer",
-  transition: "all 0.3s ease",
-  boxShadow: "0 4px 12px rgba(238, 9, 121, 0.3)",
-},
-
+  signupButton: {
+    marginTop: "12px",
+    padding: "12px",
+    width: "100%",
+    borderRadius: "10px",
+    border: "none",
+    background: "linear-gradient(135deg, #ff6a00, #ee0979)",
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: "14px",
+    cursor: "pointer",
+    transition: "all 0.3s ease",
+    boxShadow: "0 4px 12px rgba(238, 9, 121, 0.3)",
+  },
   divider: {
     margin: "15px 0",
     fontWeight: "bold",
@@ -151,6 +191,39 @@ signupButton: {
     display: "flex",
     justifyContent: "center",
   },
+};
+
+const popupStyle = (type) => ({
+  position: "fixed",
+  top: "80px",
+  right: "24px",
+  zIndex: 99999,
+  minWidth: "280px",
+  maxWidth: "380px",
+  padding: "14px 18px",
+  borderRadius: "14px",
+  color: "#fff",
+  fontWeight: "600",
+  display: "flex",
+  alignItems: "center",
+  gap: "12px",
+  boxShadow: "0 12px 30px rgba(0,0,0,0.25)",
+  background:
+    type === "success"
+      ? "linear-gradient(135deg, #16a34a, #22c55e)"
+      : "linear-gradient(135deg, #dc2626, #f97316)",
+});
+
+const popupIconStyle = {
+  width: "28px",
+  height: "28px",
+  borderRadius: "50%",
+  background: "rgba(255,255,255,0.25)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontWeight: "bold",
+  flexShrink: 0,
 };
 
 export default Login;

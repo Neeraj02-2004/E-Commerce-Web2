@@ -1,82 +1,3 @@
-// import axios from "../axios";
-// import { useState, useEffect, createContext } from "react";
-
-// const AppContext = createContext({
-//   data: [],
-//   isError: "",
-//   cart: [],
-//   addToCart: (product) => {},
-//   removeFromCart: (productId) => {},
-//   refreshData:() =>{},
-//   updateStockQuantity: (productId, newQuantity) =>{}
-  
-// });
-
-// export const AppProvider = ({ children }) => {
-//   const [data, setData] = useState([]);
-//   const [isError, setIsError] = useState("");
-//   const [cart, setCart] = useState(JSON.parse(localStorage.getItem('cart')) || []);
-
-
-//   const addToCart = (product) => {
-//     const existingProductIndex = cart.findIndex((item) => item.id === product.id);
-//     if (existingProductIndex !== -1) {
-//       const updatedCart = cart.map((item, index) =>
-//         index === existingProductIndex
-//           ? { ...item, quantity: item.quantity + 1 }
-//           : item
-//       );
-//       setCart(updatedCart);
-//       localStorage.setItem('cart', JSON.stringify(updatedCart));
-//     } else {
-//       const updatedCart = [...cart, { ...product, quantity: 1 }];
-//       setCart(updatedCart);
-//       localStorage.setItem('cart', JSON.stringify(updatedCart));
-//     }
-//   };
-
-//   const removeFromCart = (productId) => {
-//     console.log("productID",productId)
-//     const updatedCart = cart.filter((item) => item.id !== productId);
-//     setCart(updatedCart);
-//     localStorage.setItem('cart', JSON.stringify(updatedCart));
-//     console.log("CART",cart)
-//   };
-
-//   const refreshData = async () => {
-//     try {
-//       const response = await axios.get("/products");
-//       setData(response.data);
-//     } catch (error) {
-//       setIsError(error.message);
-//     }
-//   };
-
-//   const clearCart =() =>{
-//     setCart([]);
-//   }
-  
-//   useEffect(() => {
-//     refreshData();
-//   }, []);
-
-//   useEffect(() => {
-//     localStorage.setItem('cart', JSON.stringify(cart));
-//   }, [cart]);
-  
-//   return (
-//     <AppContext.Provider value={{ data, isError, cart, addToCart, removeFromCart,refreshData, clearCart  }}>
-//       {children}
-//     </AppContext.Provider>
-//   );
-// };
-
-// export default AppContext;
-
-
-
-
-
 import axios from "../axios";
 import { useState, useEffect, createContext } from "react";
 
@@ -84,20 +5,34 @@ const AppContext = createContext({
   data: [],
   isError: "",
   cart: [],
+  isAdmin: false,
+  token: null,
+  role: "USER",
   addToCart: (product) => {},
   removeFromCart: (productId) => {},
   refreshData: () => {},
   clearCart: () => {},
-  removeMultipleFromCart: (ids) => {}
+  removeMultipleFromCart: (ids) => {},
+  refreshAuth: () => {},
 });
 
 export const AppProvider = ({ children }) => {
   const [data, setData] = useState([]);
   const [isError, setIsError] = useState("");
 
+  const [token, setToken] = useState(localStorage.getItem("token"));
+  const [role, setRole] = useState(localStorage.getItem("role") || "USER");
+
+  const isAdmin = role === "ADMIN";
+
   const [cart, setCart] = useState(
     JSON.parse(localStorage.getItem("cart")) || []
   );
+
+  const refreshAuth = () => {
+    setToken(localStorage.getItem("token"));
+    setRole(localStorage.getItem("role") || "USER");
+  };
 
   const addToCart = (product) => {
     const existingIndex = cart.findIndex((item) => item.id === product.id);
@@ -106,9 +41,7 @@ export const AppProvider = ({ children }) => {
 
     if (existingIndex !== -1) {
       updatedCart = cart.map((item, i) =>
-        i === existingIndex
-          ? { ...item, quantity: item.quantity + 1 }
-          : item
+        i === existingIndex ? { ...item, quantity: item.quantity + 1 } : item
       );
     } else {
       updatedCart = [...cart, { ...product, quantity: 1 }];
@@ -124,7 +57,6 @@ export const AppProvider = ({ children }) => {
     localStorage.setItem("cart", JSON.stringify(updatedCart));
   };
 
-  // 🔥 ADDED ONLY (REQUIRED FIX)
   const removeMultipleFromCart = (ids) => {
     const updatedCart = cart.filter((item) => !ids.includes(item.id));
     setCart(updatedCart);
@@ -140,6 +72,7 @@ export const AppProvider = ({ children }) => {
     try {
       const response = await axios.get("/products");
       setData([...response.data]);
+      setIsError("");
     } catch (error) {
       setIsError(error.message);
     }
@@ -147,6 +80,7 @@ export const AppProvider = ({ children }) => {
 
   useEffect(() => {
     refreshData();
+    refreshAuth();
   }, []);
 
   useEffect(() => {
@@ -159,11 +93,15 @@ export const AppProvider = ({ children }) => {
         data,
         isError,
         cart,
+        token,
+        role,
+        isAdmin,
         addToCart,
         removeFromCart,
         refreshData,
         clearCart,
-        removeMultipleFromCart
+        removeMultipleFromCart,
+        refreshAuth,
       }}
     >
       {children}

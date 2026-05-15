@@ -1,16 +1,36 @@
-
 import React, { useContext, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
-import axios from "../axios";
-
 import AppContext from "../Context/Context";
-import unplugged from "../assets/unplugged.png"
+import unplugged from "../assets/unplugged.png";
 
 const Home = ({ selectedCategory }) => {
   const { data, isError, addToCart, refreshData } = useContext(AppContext);
   const [products, setProducts] = useState([]);
   const [isDataFetched, setIsDataFetched] = useState(false);
+  const [popup, setPopup] = useState({
+    show: false,
+    message: "",
+    type: "success",
+  });
+
+  const isAdmin = localStorage.getItem("role") === "ADMIN";
+
+  const showPopup = (message, type = "success") => {
+    setPopup({
+      show: true,
+      message,
+      type,
+    });
+
+    setTimeout(() => {
+      setPopup({
+        show: false,
+        message: "",
+        type: "success",
+      });
+    }, 2500);
+  };
 
   useEffect(() => {
     if (!isDataFetched) {
@@ -21,32 +41,31 @@ const Home = ({ selectedCategory }) => {
 
   useEffect(() => {
     if (data && data.length > 0) {
-      const fetchImagesAndUpdateProducts = async () => {
-        const updatedProducts = await Promise.all(
-          data.map(async (product) => {
-            try {
-              const response = await axios.get(
-                `/product/${product.id}/image`, // ✅ cleaner (baseURL already set)
-                { responseType: "blob" }
-              );
-              const imageUrl = URL.createObjectURL(response.data);
-              return { ...product, imageUrl };
-            } catch (error) {
-              console.error(
-                "Error fetching image for product ID:",
-                product.id,
-                error
-              );
-              return { ...product, imageUrl: "placeholder-image-url" };
-            }
-          })
-        );
-        setProducts(updatedProducts);
-      };
-
-      fetchImagesAndUpdateProducts();
+      setProducts(data);
     }
   }, [data]);
+
+  const getImageUrl = (product) => {
+    if (!product.imageUrl) {
+      return unplugged;
+    }
+
+    if (product.imageUrl.startsWith("http")) {
+      return product.imageUrl;
+    }
+
+    return `http://localhost:8080${product.imageUrl}`;
+  };
+
+  const handleAddToCart = (product) => {
+    if (!product.productAvailable) {
+      showPopup("Product is out of stock", "error");
+      return;
+    }
+
+    addToCart(product);
+    showPopup(`${product.name} added to cart`, "success");
+  };
 
   const filteredProducts = selectedCategory
     ? products.filter((product) => product.category === selectedCategory)
@@ -55,13 +74,26 @@ const Home = ({ selectedCategory }) => {
   if (isError) {
     return (
       <h2 className="text-center" style={{ padding: "18rem" }}>
-        <img src={unplugged} alt="Error" style={{ width: '100px', height: '100px' }}/>
+        <img
+          src={unplugged}
+          alt="Error"
+          style={{ width: "100px", height: "100px" }}
+        />
       </h2>
     );
   }
 
   return (
     <>
+      {popup.show && (
+        <div style={popupStyle(popup.type)}>
+          <div style={popupIconStyle}>
+            {popup.type === "success" ? "✓" : "!"}
+          </div>
+          <div>{popup.message}</div>
+        </div>
+      )}
+
       <div
         className="grid"
         style={{
@@ -85,8 +117,7 @@ const Home = ({ selectedCategory }) => {
           </h2>
         ) : (
           filteredProducts.map((product) => {
-            const { id, brand, name, price, productAvailable, imageUrl } =
-              product;
+            const { id, brand, name, price, productAvailable } = product;
 
             return (
               <div
@@ -100,8 +131,8 @@ const Home = ({ selectedCategory }) => {
                   backgroundColor: productAvailable ? "#fff" : "#ccc",
                   display: "flex",
                   flexDirection: "column",
-                  justifyContent: 'flex-start',
-                  alignItems: 'stretch'
+                  justifyContent: "flex-start",
+                  alignItems: "stretch",
                 }}
                 key={id}
               >
@@ -110,7 +141,7 @@ const Home = ({ selectedCategory }) => {
                   style={{ textDecoration: "none", color: "inherit" }}
                 >
                   <img
-                    src={imageUrl}
+                    src={getImageUrl(product)}
                     alt={name}
                     style={{
                       width: "100%",
@@ -118,7 +149,7 @@ const Home = ({ selectedCategory }) => {
                       objectFit: "cover",
                       padding: "5px",
                       margin: "0",
-                      borderRadius: "10px"
+                      borderRadius: "10px",
                     }}
                   />
 
@@ -156,7 +187,7 @@ const Home = ({ selectedCategory }) => {
                         style={{
                           fontWeight: "600",
                           fontSize: "1.1rem",
-                          marginBottom: '5px'
+                          marginBottom: "5px",
                         }}
                       >
                         <i className="bi bi-currency-rupee"></i>
@@ -164,21 +195,32 @@ const Home = ({ selectedCategory }) => {
                       </h5>
                     </div>
 
-                    <button
-                      className="btn-hover color-9"
-                      style={{ margin: '10px 25px 0px' }}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        addToCart(product);
+                    {!isAdmin && (
+                      <button
+                        className="btn-hover color-9"
+                        style={{ margin: "10px 25px 0px" }}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handleAddToCart(product);
+                        }}
+                        disabled={!productAvailable}
+                      >
+                        {productAvailable ? "Add to Cart" : "Out of Stock"}
+                      </button>
+                    )}
 
-                        // ✅ NEW (FEEDBACK)
-                        alert("Added to cart");
-                      }}
-                      disabled={!productAvailable}
-                    >
-                      {productAvailable ? "Add to Cart" : "Out of Stock"}
-                    </button>
-
+                    {isAdmin && (
+                      <button
+                        className="btn-hover color-9"
+                        style={{ margin: "10px 25px 0px" }}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          window.location.href = `/product/${id}`;
+                        }}
+                      >
+                        Manage Product
+                      </button>
+                    )}
                   </div>
                 </Link>
               </div>
@@ -188,6 +230,39 @@ const Home = ({ selectedCategory }) => {
       </div>
     </>
   );
+};
+
+const popupStyle = (type) => ({
+  position: "fixed",
+  top: "80px",
+  right: "24px",
+  zIndex: 99999,
+  minWidth: "280px",
+  maxWidth: "380px",
+  padding: "14px 18px",
+  borderRadius: "14px",
+  color: "#fff",
+  fontWeight: "600",
+  display: "flex",
+  alignItems: "center",
+  gap: "12px",
+  boxShadow: "0 12px 30px rgba(0,0,0,0.25)",
+  background:
+    type === "success"
+      ? "linear-gradient(135deg, #16a34a, #22c55e)"
+      : "linear-gradient(135deg, #dc2626, #f97316)",
+});
+
+const popupIconStyle = {
+  width: "28px",
+  height: "28px",
+  borderRadius: "50%",
+  background: "rgba(255,255,255,0.25)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontWeight: "bold",
+  flexShrink: 0,
 };
 
 export default Home;

@@ -1,4 +1,3 @@
-
 import "./App.css";
 import React, { useState, useEffect } from "react";
 import Home from "./components/Home";
@@ -12,6 +11,8 @@ import UpdateProduct from "./components/UpdateProduct";
 import OrderStatus from "./components/OrderStatus";
 import Register from "./components/Register";
 import Login from "./components/Login";
+import Wishlist from "./components/Wishlist";
+
 
 import "bootstrap/dist/css/bootstrap.min.css";
 import "bootstrap/dist/js/bootstrap.bundle.min.js";
@@ -20,7 +21,6 @@ function App() {
   const [selectedCategory, setSelectedCategory] = useState("");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-  // ✅ FIX: Always sync with localStorage
   useEffect(() => {
     const checkLogin = () => {
       const token = localStorage.getItem("token");
@@ -29,7 +29,6 @@ function App() {
 
     checkLogin();
 
-    // ✅ listen for changes (important)
     window.addEventListener("storage", checkLogin);
 
     return () => window.removeEventListener("storage", checkLogin);
@@ -46,20 +45,33 @@ function App() {
 
   const handleLogout = () => {
     localStorage.removeItem("token");
+    localStorage.removeItem("role");
     setIsLoggedIn(false);
   };
 
-  // ✅ FIX: check token directly (NOT state only)
   const ProtectedRoute = ({ children }) => {
     const token = localStorage.getItem("token");
     return token ? children : <Navigate to="/login" replace />;
   };
 
+  const AdminRoute = ({ children }) => {
+    const token = localStorage.getItem("token");
+    const role = localStorage.getItem("role");
+
+    if (!token) {
+      return <Navigate to="/login" replace />;
+    }
+
+    if (role !== "ADMIN") {
+      return <Navigate to="/" replace />;
+    }
+
+    return children;
+  };
+
   return (
     <AppProvider>
       <BrowserRouter>
-
-        {/* ✅ Navbar */}
         {isLoggedIn && (
           <Navbar
             onSelectCategory={handleCategorySelect}
@@ -68,8 +80,6 @@ function App() {
         )}
 
         <Routes>
-
-          {/* LOGIN */}
           <Route
             path="/login"
             element={
@@ -81,19 +91,13 @@ function App() {
             }
           />
 
-          {/* REGISTER */}
           <Route
             path="/register"
             element={
-              localStorage.getItem("token") ? (
-                <Navigate to="/" />
-              ) : (
-                <Register />
-              )
+              localStorage.getItem("token") ? <Navigate to="/" /> : <Register />
             }
           />
 
-          {/* HOME */}
           <Route
             path="/"
             element={
@@ -103,7 +107,6 @@ function App() {
             }
           />
 
-          {/* CART */}
           <Route
             path="/cart"
             element={
@@ -113,15 +116,24 @@ function App() {
             }
           />
 
-          {/* OTHER ROUTES */}
           <Route
             path="/add_product"
             element={
-              <ProtectedRoute>
+              <AdminRoute>
                 <AddProduct />
+              </AdminRoute>
+            }
+          />
+
+          <Route
+            path="/wishlist"
+            element={
+              <ProtectedRoute>
+                  <Wishlist />
               </ProtectedRoute>
             }
           />
+
 
           <Route
             path="/product/:id"
@@ -135,9 +147,9 @@ function App() {
           <Route
             path="/product/update/:id"
             element={
-              <ProtectedRoute>
+              <AdminRoute>
                 <UpdateProduct />
-              </ProtectedRoute>
+              </AdminRoute>
             }
           />
 
@@ -149,9 +161,7 @@ function App() {
               </ProtectedRoute>
             }
           />
-
         </Routes>
-
       </BrowserRouter>
     </AppProvider>
   );

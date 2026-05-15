@@ -1,100 +1,299 @@
 import { useNavigate, useParams } from "react-router-dom";
-import { useContext, useEffect } from "react";
-import { useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import AppContext from "../Context/Context";
 import axios from "../axios";
-import UpdateProduct from "./UpdateProduct";
+import {
+  addToWishlist,
+  getWishlist,
+  removeFromWishlist,
+} from "../api/wishlistApi";
+
 const Product = () => {
   const { id } = useParams();
-  const { data, addToCart, removeFromCart, cart, refreshData } =
-    useContext(AppContext);
+  const { addToCart, removeFromCart, refreshData } = useContext(AppContext);
+
   const [product, setProduct] = useState(null);
   const [imageUrl, setImageUrl] = useState("");
+  const [isWishlisted, setIsWishlisted] = useState(false);
+  const [wishlistLoading, setWishlistLoading] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [popup, setPopup] = useState({
+    show: false,
+    message: "",
+    type: "success",
+  });
+
   const navigate = useNavigate();
+
+  const token = localStorage.getItem("token");
+  const isAdmin = localStorage.getItem("role") === "ADMIN";
+  const isLoggedIn = Boolean(token);
+
+  const showPopup = (message, type = "success") => {
+    setPopup({ show: true, message, type });
+
+    setTimeout(() => {
+      setPopup({ show: false, message: "", type: "success" });
+    }, 2500);
+  };
 
   useEffect(() => {
     const fetchProduct = async () => {
       try {
-        const response = await axios.get(
-          `http://localhost:8080/api/product/${id}`
-        );
+        const response = await axios.get(`/product/${id}`);
         setProduct(response.data);
-        if (response.data.imageName) {
-          fetchImage();
+
+        if (response.data.imageUrl) {
+          setImageUrl(`http://localhost:8080${response.data.imageUrl}`);
         }
       } catch (error) {
         console.error("Error fetching product:", error);
+        showPopup(
+          error.response?.data?.message || "Failed to load product",
+          "error"
+        );
       }
     };
 
-    const fetchImage = async () => {
-      const response = await axios.get(
-        `http://localhost:8080/api/product/${id}/image`,
-        { responseType: "blob" }
-      );
-      setImageUrl(URL.createObjectURL(response.data));
+    const checkWishlist = async () => {
+      if (!token) return;
+
+      try {
+        const response = await getWishlist();
+        const found = response.data.some(
+          (item) => Number(item.id) === Number(id)
+        );
+        setIsWishlisted(found);
+      } catch (error) {
+        console.error("Error checking wishlist:", error);
+      }
     };
 
     fetchProduct();
-  }, [id]);
+    checkWishlist();
+  }, [id, token]);
+
+  const openDeleteConfirm = () => {
+    if (!token) {
+      showPopup("Please login first", "error");
+      return;
+    }
+
+    if (!isAdmin) {
+      showPopup("Only admin can delete products", "error");
+      return;
+    }
+
+    setShowDeleteConfirm(true);
+  };
 
   const deleteProduct = async () => {
     try {
-      await axios.delete(`http://localhost:8080/api/product/${id}`);
-      removeFromCart(id);
-      console.log("Product deleted successfully");
-      alert("Product deleted successfully");
+      setShowDeleteConfirm(false);
+
+      await axios.delete(`/admin/product/${id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      removeFromCart(Number(id));
+      showPopup("Product disabled successfully", "success");
       refreshData();
-      navigate("/");
+
+      setTimeout(() => {
+        navigate("/");
+      }, 900);
     } catch (error) {
       console.error("Error deleting product:", error);
+
+      const message =
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        error.response?.data ||
+        "Error deleting product";
+
+      showPopup(String(message), "error");
     }
   };
 
   const handleEditClick = () => {
+    if (!token || !isAdmin) {
+      showPopup("Only admin can update products", "error");
+      return;
+    }
+
     navigate(`/product/update/${id}`);
   };
 
-  const handlAddToCart = () => {
+  const handleAddToCart = () => {
+    if (!product.productAvailable) {
+      showPopup("Product is out of stock", "error");
+      return;
+    }
+
     addToCart(product);
-    alert("Product added to cart");
+    showPopup(`${product.name} added to cart`, "success");
   };
+
+  const handleWishlistClick = async () => {
+    if (!isLoggedIn) {
+      showPopup("Please login to use wishlist", "error");
+
+      setTimeout(() => {
+        navigate("/login");
+      }, 900);
+
+      return;
+    }
+
+    if (wishlistLoading) return;
+
+    try {
+      setWishlistLoading(true);
+
+      if (isWishlisted) {
+        await removeFromWishlist(product.id);
+        setIsWishlisted(false);
+        showPopup(`${product.name} removed from wishlist`, "success");
+      } else {
+        await addToWishlist(product.id);
+        setIsWishlisted(true);
+        showPopup(`${product.name} added to wishlist`, "success");
+      }
+    } catch (error) {
+      console.error("Wishlist error:", error);
+      showPopup(
+        error.response?.data?.message || "Wishlist action failed",
+        "error"
+      );
+    } finally {
+      setWishlistLoading(false);
+    }
+  };
+
   if (!product) {
     return (
-      <h2 className="text-center" style={{ padding: "10rem" }}>
-        Loading...
-      </h2>
+      <>
+        {popup.show && (
+          <div style={popupStyle(popup.type)}>
+            <div style={popupIconStyle}>
+              {popup.type === "success" ? "✓" : "!"}
+            </div>
+            <div>{popup.message}</div>
+          </div>
+        )}
+
+        <h2 className="text-center" style={{ padding: "10rem" }}>
+          Loading...
+        </h2>
+      </>
     );
   }
+
   return (
     <>
+      {popup.show && (
+        <div style={popupStyle(popup.type)}>
+          <div style={popupIconStyle}>
+            {popup.type === "success" ? "✓" : "!"}
+          </div>
+          <div>{popup.message}</div>
+        </div>
+      )}
+
+      {showDeleteConfirm && (
+        <div style={confirmOverlayStyle}>
+          <div style={confirmBoxStyle}>
+            <div style={confirmIconStyle}>!</div>
+
+            <h3 style={{ marginBottom: "10px" }}>Delete Product?</h3>
+
+            <p style={{ color: "#666", marginBottom: "22px" }}>
+              Are you sure you want to delete{" "}
+              <strong>{product.name}</strong>? This action cannot be undone.
+            </p>
+
+            <div
+              style={{
+                display: "flex",
+                gap: "12px",
+                justifyContent: "center",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(false)}
+                style={cancelButtonStyle}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={deleteProduct}
+                style={deleteButtonStyle}
+              >
+                Yes, Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="containers" style={{ display: "flex" }}>
-        <img
-          className="left-column-img"
-          src={imageUrl}
-          alt={product.imageName}
-          style={{ width: "50%", height: "auto" }}
-        />
+        {imageUrl && (
+          <img
+            className="left-column-img"
+            src={imageUrl}
+            alt={product.imageName || product.name}
+            style={{ width: "50%", height: "auto" }}
+            onError={(e) => {
+              e.currentTarget.src = "/placeholder-image.png";
+            }}
+          />
+        )}
 
         <div className="right-column" style={{ width: "50%" }}>
           <div className="product-description">
-            <div style={{display:'flex',justifyContent:'space-between' }}>
-            <span style={{ fontSize: "1.2rem", fontWeight: 'lighter' }}>
-              {product.category}
-            </span>
-            <p className="release-date" style={{ marginBottom: "2rem" }}>
-              
-              <h6>Listed : <span> <i> {new Date(product.releaseDate).toLocaleDateString()}</i></span></h6>
-              {/* <i> {new Date(product.releaseDate).toLocaleDateString()}</i> */}
-            </p>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ fontSize: "1.2rem", fontWeight: "lighter" }}>
+                {product.category}
+              </span>
+
+              <div className="release-date" style={{ marginBottom: "2rem" }}>
+                <h6>
+                  Listed :{" "}
+                  <span>
+                    <i>{new Date(product.releaseDate).toLocaleDateString()}</i>
+                  </span>
+                </h6>
+              </div>
             </div>
-            
-           
-            <h1 style={{ fontSize: "2rem", marginBottom: "0.5rem",textTransform: 'capitalize', letterSpacing:'1px' }}>
+
+            <h1
+              style={{
+                fontSize: "2rem",
+                marginBottom: "0.5rem",
+                textTransform: "capitalize",
+                letterSpacing: "1px",
+              }}
+            >
               {product.name}
             </h1>
+
             <i style={{ marginBottom: "3rem" }}>{product.brand}</i>
-            <p style={{fontWeight:'bold',fontSize:'1rem',margin:'10px 0px 0px'}}>PRODUCT DESCRIPTION :</p>
+
+            <p
+              style={{
+                fontWeight: "bold",
+                fontSize: "1rem",
+                margin: "10px 0px 0px",
+              }}
+            >
+              PRODUCT DESCRIPTION :
+            </p>
+
             <p style={{ marginBottom: "1rem" }}>{product.description}</p>
           </div>
 
@@ -102,72 +301,194 @@ const Product = () => {
             <span style={{ fontSize: "2rem", fontWeight: "bold" }}>
               {"₹" + product.price}
             </span>
-            <button
-              className={`cart-btn ${
-                !product.productAvailable ? "disabled-btn" : ""
-              }`}
-              onClick={handlAddToCart}
-              disabled={!product.productAvailable}
-              style={{
-                padding: "1rem 2rem",
-                fontSize: "1rem",
-                backgroundColor: "#007bff",
-                color: "white",
-                border: "none",
-                borderRadius: "5px",
-                cursor: "pointer",
-                marginBottom: "1rem",
-              }}
-            >
-              {product.productAvailable ? "Add to cart" : "Out of Stock"}
-            </button>
+
+            <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+              <button
+                className={`cart-btn ${
+                  !product.productAvailable ? "disabled-btn" : ""
+                }`}
+                onClick={handleAddToCart}
+                disabled={!product.productAvailable}
+                style={{
+                  padding: "1rem 2rem",
+                  fontSize: "1rem",
+                  backgroundColor: "#007bff",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "5px",
+                  cursor: product.productAvailable ? "pointer" : "not-allowed",
+                  marginBottom: "1rem",
+                }}
+              >
+                {product.productAvailable ? "Add to cart" : "Out of Stock"}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleWishlistClick}
+                disabled={wishlistLoading}
+                style={{
+                  padding: "1rem 2rem",
+                  fontSize: "1rem",
+                  fontWeight: "600",
+                  backgroundColor: isWishlisted ? "#e91e63" : "#ffe4ef",
+                  color: isWishlisted ? "white" : "#c2185b",
+                  border: "1px solid #e91e63",
+                  borderRadius: "8px",
+                  cursor: wishlistLoading ? "not-allowed" : "pointer",
+                  marginBottom: "1rem",
+                  boxShadow: "0 4px 12px rgba(233, 30, 99, 0.25)",
+                  transition: "all 0.2s ease",
+                }}
+              >
+                {wishlistLoading
+                  ? "Please wait..."
+                  : isWishlisted
+                  ? "♥ Wishlisted"
+                  : "♡ Add to Wishlist"}
+              </button>
+            </div>
+
             <h6 style={{ marginBottom: "1rem" }}>
               Stock Available :{" "}
               <i style={{ color: "green", fontWeight: "bold" }}>
                 {product.stockQuantity}
               </i>
             </h6>
-          
           </div>
-          <div className="update-button" style={{ display: "flex", gap: "1rem" }}>
-            <button
-              className="btn btn-primary"
-              type="button"
-              onClick={handleEditClick}
-              style={{
-                padding: "1rem 2rem",
-                fontSize: "1rem",
-                backgroundColor: "#007bff",
-                color: "white",
-                border: "none",
-                borderRadius: "5px",
-                cursor: "pointer",
-              }}
+
+          {isAdmin && (
+            <div
+              className="update-button"
+              style={{ display: "flex", gap: "1rem" }}
             >
-              Update
-            </button>
-            {/* <UpdateProduct product={product} onUpdate={handleUpdate} /> */}
-            <button
-              className="btn btn-primary"
-              type="button"
-              onClick={deleteProduct}
-              style={{
-                padding: "1rem 2rem",
-                fontSize: "1rem",
-                backgroundColor: "#dc3545",
-                color: "white",
-                border: "none",
-                borderRadius: "5px",
-                cursor: "pointer",
-              }}
-            >
-              Delete
-            </button>
-          </div>
+              <button
+                className="btn btn-primary"
+                type="button"
+                onClick={handleEditClick}
+                style={{
+                  padding: "1rem 2rem",
+                  fontSize: "1rem",
+                  backgroundColor: "#007bff",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "5px",
+                  cursor: "pointer",
+                }}
+              >
+                Update
+              </button>
+
+              <button
+                className="btn btn-primary"
+                type="button"
+                onClick={openDeleteConfirm}
+                style={{
+                  padding: "1rem 2rem",
+                  fontSize: "1rem",
+                  backgroundColor: "#dc3545",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "5px",
+                  cursor: "pointer",
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </>
   );
+};
+
+const popupStyle = (type) => ({
+  position: "fixed",
+  top: "80px",
+  right: "24px",
+  zIndex: 99999,
+  minWidth: "280px",
+  maxWidth: "380px",
+  padding: "14px 18px",
+  borderRadius: "14px",
+  color: "#fff",
+  fontWeight: "600",
+  display: "flex",
+  alignItems: "center",
+  gap: "12px",
+  boxShadow: "0 12px 30px rgba(0,0,0,0.25)",
+  background:
+    type === "success"
+      ? "linear-gradient(135deg, #16a34a, #22c55e)"
+      : "linear-gradient(135deg, #dc2626, #f97316)",
+});
+
+const popupIconStyle = {
+  width: "28px",
+  height: "28px",
+  borderRadius: "50%",
+  background: "rgba(255,255,255,0.25)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontWeight: "bold",
+  flexShrink: 0,
+};
+
+const confirmOverlayStyle = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(0,0,0,0.45)",
+  zIndex: 99998,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "20px",
+};
+
+const confirmBoxStyle = {
+  width: "100%",
+  maxWidth: "420px",
+  background: "#fff",
+  borderRadius: "18px",
+  padding: "28px",
+  textAlign: "center",
+  boxShadow: "0 20px 60px rgba(0,0,0,0.35)",
+};
+
+const confirmIconStyle = {
+  width: "54px",
+  height: "54px",
+  borderRadius: "50%",
+  background: "linear-gradient(135deg, #dc2626, #f97316)",
+  color: "#fff",
+  fontSize: "28px",
+  fontWeight: "bold",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  margin: "0 auto 16px",
+};
+
+const cancelButtonStyle = {
+  padding: "10px 18px",
+  borderRadius: "10px",
+  border: "1px solid #ddd",
+  background: "#f8f9fa",
+  color: "#333",
+  fontWeight: "600",
+  cursor: "pointer",
+};
+
+const deleteButtonStyle = {
+  padding: "10px 18px",
+  borderRadius: "10px",
+  border: "none",
+  background: "linear-gradient(135deg, #dc2626, #ef4444)",
+  color: "#fff",
+  fontWeight: "700",
+  cursor: "pointer",
 };
 
 export default Product;
