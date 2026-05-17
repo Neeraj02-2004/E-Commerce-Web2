@@ -145,11 +145,26 @@ public class ProductService {
         logger.info("Disabled product id: {}", id);
     }
 
-
-    @Cacheable(value = "searchProducts", key = "#keyword")
+    @Cacheable(value = "searchProducts", key = "#keyword.trim().toLowerCase()")
     public List<Product> searchProducts(String keyword) {
-        logger.info("Searching keyword: {}", keyword);
-        return productRepo.searchProducts(keyword);
+        String cleanKeyword = normalizeSearchKeyword(keyword);
+
+        logger.info("Searching keyword: {}", cleanKeyword);
+        return productRepo.searchProducts(cleanKeyword);
+    }
+
+    private String normalizeSearchKeyword(String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            throw new InvalidProductDataException("Search keyword is required");
+        }
+
+        String cleanKeyword = keyword.trim();
+
+        if (cleanKeyword.length() > 100) {
+            throw new InvalidProductDataException("Search keyword must not exceed 100 characters");
+        }
+
+        return cleanKeyword;
     }
 
     private void validateImageFile(MultipartFile imageFile, boolean required) {

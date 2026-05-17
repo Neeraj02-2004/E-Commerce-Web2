@@ -4,6 +4,15 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 
+### Local secrets ###
+src/main/resources/application-local.properties
+.env
+.env.*
+!.env.example
+
+### Uploaded files ###
+uploads/
+
 ### STS ###
 .apt_generated
 .classpath
@@ -32,4 +41,4 @@ build/
 ### VS Code ###
 .vscode/
 
-uploads/
+products.sql

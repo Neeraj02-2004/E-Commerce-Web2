@@ -6,12 +6,13 @@ import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
 import com.neeraj.SpringEcom.Service.JwtService;
 import com.neeraj.SpringEcom.Service.UserService;
-import com.neeraj.SpringEcom.dto.UserResponse;
 import com.neeraj.SpringEcom.exception.AuthException;
+import com.neeraj.SpringEcom.model.AppConstants;
 import com.neeraj.SpringEcom.model.User;
 import com.neeraj.SpringEcom.model.dto.GoogleLoginRequest;
 import com.neeraj.SpringEcom.model.dto.LoginRequest;
 import com.neeraj.SpringEcom.model.dto.RegisterRequest;
+import com.neeraj.SpringEcom.model.dto.UserResponse;
 import com.neeraj.SpringEcom.repo.UserRepo;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Value;
@@ -55,8 +56,8 @@ public class UserController {
         user.setUsername(request.username().trim());
         user.setEmail(request.email().toLowerCase().trim());
         user.setPassword(request.password());
-        user.setProvider("LOCAL");
-        user.setRole("USER");
+        user.setProvider(AppConstants.Provider.LOCAL);
+        user.setRole(AppConstants.Role.USER);
 
         User savedUser = userService.saveUser(user);
 
@@ -78,7 +79,7 @@ public class UserController {
         User existingUser = userRepo.findByEmail(email)
                 .orElseThrow(() -> new AuthException("Invalid email or password"));
 
-        if (!"LOCAL".equals(existingUser.getProvider())) {
+        if (!AppConstants.Provider.LOCAL.equals(existingUser.getProvider())) {
             throw new AuthException("Please login with Google");
         }
 
@@ -141,14 +142,14 @@ public class UserController {
                     User newUser = new User();
                     newUser.setEmail(email);
                     newUser.setUsername(finalUsername);
-                    newUser.setProvider("GOOGLE");
-                    newUser.setRole("USER");
+                    newUser.setProvider(AppConstants.Provider.GOOGLE);
+                    newUser.setRole(AppConstants.Role.USER);
                     newUser.setPassword(null);
 
                     return userRepo.save(newUser);
                 });
 
-        if (!"GOOGLE".equals(user.getProvider())) {
+        if (!AppConstants.Provider.GOOGLE.equals(user.getProvider())) {
             throw new AuthException("Please login with email and password");
         }
 

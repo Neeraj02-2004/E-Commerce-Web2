@@ -27,8 +27,9 @@ public interface ProductRepo extends JpaRepository<Product, Integer> {
             value = """
                     SELECT *
                     FROM product
-                    WHERE search_vector @@ plainto_tsquery('english', :keyword)
-                    ORDER BY ts_rank(search_vector, plainto_tsquery('english', :keyword)) DESC
+                    WHERE product_available = true
+                      AND search_vector @@ websearch_to_tsquery('english', :keyword)
+                    ORDER BY ts_rank(search_vector, websearch_to_tsquery('english', :keyword)) DESC, id DESC
                     """,
             nativeQuery = true
     )

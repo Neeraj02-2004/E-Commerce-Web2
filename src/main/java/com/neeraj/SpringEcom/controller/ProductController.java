@@ -6,6 +6,7 @@ import com.neeraj.SpringEcom.exception.InvalidProductDataException;
 import com.neeraj.SpringEcom.exception.ProductNotFoundException;
 import com.neeraj.SpringEcom.model.Product;
 import com.neeraj.SpringEcom.model.dto.ProductRequest;
+import com.neeraj.SpringEcom.model.dto.ProductResponse;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Validator;
@@ -56,16 +57,21 @@ public class ProductController {
     }
 
     @GetMapping("/products")
-    public ResponseEntity<List<Product>> getProducts() {
-        return ResponseEntity.ok(productService.getAllProducts());
+    public ResponseEntity<List<ProductResponse>> getProducts() {
+        List<ProductResponse> products = productService.getAllProducts()
+                .stream()
+                .map(this::toProductResponse)
+                .toList();
+
+        return ResponseEntity.ok(products);
     }
 
     @GetMapping("/product/{id}")
-    public ResponseEntity<Product> getProductsById(@PathVariable @Min(1) int id) {
+    public ResponseEntity<ProductResponse> getProductsById(@PathVariable @Min(1) int id) {
         Product product = productService.getProductById(id)
                 .orElseThrow(() -> new ProductNotFoundException(id));
 
-        return ResponseEntity.ok(product);
+        return ResponseEntity.ok(toProductResponse(product));
     }
 
     @GetMapping("/product-images/{filename:.+}")
@@ -109,12 +115,19 @@ public class ProductController {
     }
 
     @GetMapping("/products/search")
-    public ResponseEntity<List<Product>> searchProducts(@RequestParam("keyword") @NotBlank String keyword) {
-        return ResponseEntity.ok(productService.searchProducts(keyword.trim()));
+    public ResponseEntity<List<ProductResponse>> searchProducts(
+            @RequestParam("keyword") @NotBlank String keyword
+    ) {
+        List<ProductResponse> products = productService.searchProducts(keyword.trim())
+                .stream()
+                .map(this::toProductResponse)
+                .toList();
+
+        return ResponseEntity.ok(products);
     }
 
     @PostMapping("/admin/product")
-    public ResponseEntity<Product> addProduct(
+    public ResponseEntity<ProductResponse> addProduct(
             @RequestPart("product") String productJson,
             @RequestPart(value = "imageFile", required = false) MultipartFile imageFile
     ) {
@@ -124,7 +137,8 @@ public class ProductController {
 
             Product savedProduct = productService.addProduct(toProduct(request), imageFile);
 
-            return ResponseEntity.status(HttpStatus.CREATED).body(savedProduct);
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(toProductResponse(savedProduct));
 
         } catch (IOException e) {
             throw new InvalidProductDataException("Invalid product data");
@@ -132,7 +146,7 @@ public class ProductController {
     }
 
     @PutMapping("/admin/product/{id}")
-    public ResponseEntity<Product> updateProduct(
+    public ResponseEntity<ProductResponse> updateProduct(
             @PathVariable @Min(1) int id,
             @RequestPart("product") String productJson,
             @RequestPart(value = "imageFile", required = false) MultipartFile imageFile
@@ -143,7 +157,7 @@ public class ProductController {
 
             Product updatedProduct = productService.updateProduct(id, toProduct(request), imageFile);
 
-            return ResponseEntity.ok(updatedProduct);
+            return ResponseEntity.ok(toProductResponse(updatedProduct));
 
         } catch (IOException e) {
             throw new InvalidProductDataException("Invalid product data");
@@ -190,5 +204,22 @@ public class ProductController {
         product.setStockQuantity(request.stockQuantity());
 
         return product;
+    }
+
+    private ProductResponse toProductResponse(Product product) {
+        return new ProductResponse(
+                product.getId(),
+                product.getName(),
+                product.getDescription(),
+                product.getBrand(),
+                product.getPrice(),
+                product.getCategory(),
+                product.getReleaseDate(),
+                product.isProductAvailable(),
+                product.getStockQuantity(),
+                product.getImageName(),
+                product.getImageType(),
+                product.getImageUrl()
+        );
     }
 }

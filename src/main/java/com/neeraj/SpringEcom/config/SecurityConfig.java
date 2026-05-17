@@ -66,6 +66,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(request -> request
 
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                        .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
+
 
                         .requestMatchers(HttpMethod.POST, "/api/register").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/login").permitAll()
@@ -118,16 +121,19 @@ public class SecurityConfig {
                 .filter(origin -> !origin.isBlank())
                 .toList();
 
-        boolean hasWildcard = allowedOrigins.stream().anyMatch(origin -> origin.contains("*"));
+        boolean hasWildcard = allowedOrigins.stream()
+                .anyMatch(origin -> origin.contains("*"));
 
         if (hasWildcard) {
-            config.setAllowedOriginPatterns(allowedOrigins);
-        } else {
-            config.setAllowedOrigins(allowedOrigins);
+            throw new IllegalStateException(
+                    "CORS origins must be exact domains when credentials are enabled. Remove wildcard origins from app.cors.origins."
+            );
         }
 
+        config.setAllowedOrigins(allowedOrigins);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("*"));
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "Origin"));
+        config.setExposedHeaders(List.of("Authorization"));
         config.setAllowCredentials(true);
         config.setMaxAge(3600L);
 

@@ -27,8 +27,8 @@ public class User {
     private String password;
 
     @Column(nullable = false)
-    private String provider = "LOCAL";
+    private String provider = AppConstants.Provider.LOCAL;
 
     @Column(nullable = false)
-    private String role = "USER";
+    private String role = AppConstants.Role.USER;
 }

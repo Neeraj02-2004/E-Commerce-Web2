@@ -2,6 +2,7 @@ package com.neeraj.SpringEcom.Service;
 
 import com.neeraj.SpringEcom.exception.EmailAlreadyRegisteredException;
 import com.neeraj.SpringEcom.exception.InvalidUserException;
+import com.neeraj.SpringEcom.model.AppConstants;
 import com.neeraj.SpringEcom.model.User;
 import com.neeraj.SpringEcom.repo.UserRepo;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -32,8 +33,8 @@ public class UserService {
 
         user.setEmail(email);
         user.setUsername(username);
-        user.setProvider("LOCAL");
-        user.setRole("USER");
+        user.setProvider(AppConstants.Provider.LOCAL);
+        user.setRole(AppConstants.Role.USER);
         user.setPassword(encoder.encode(user.getPassword()));
 
         return repo.save(user);
@@ -83,5 +84,3 @@ public class UserService {
         }
     }
 }
-
-

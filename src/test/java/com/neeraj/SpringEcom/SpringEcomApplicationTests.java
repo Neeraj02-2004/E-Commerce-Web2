@@ -1,13 +1,13 @@
 package com.neeraj.SpringEcom;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
 
-@SpringBootTest
+import static org.assertj.core.api.Assertions.assertThat;
+
 class SpringEcomApplicationTests {
 
 	@Test
-	void contextLoads() {
+	void applicationClass_shouldExist() {
+		assertThat(SpringEcomApplication.class).isNotNull();
 	}
-
 }

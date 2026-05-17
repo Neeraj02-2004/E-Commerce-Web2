@@ -6,6 +6,7 @@ import com.neeraj.SpringEcom.exception.OrderAlreadyCancelledException;
 import com.neeraj.SpringEcom.exception.OrderNotFoundException;
 import com.neeraj.SpringEcom.exception.ProductNotFoundException;
 import com.neeraj.SpringEcom.exception.UserNotAuthenticatedException;
+import com.neeraj.SpringEcom.model.AppConstants;
 import com.neeraj.SpringEcom.model.Order;
 import com.neeraj.SpringEcom.model.OrderItem;
 import com.neeraj.SpringEcom.model.Product;
@@ -25,11 +26,12 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import java.util.Map;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -59,7 +61,7 @@ public class OrderService {
         order.setCustomerName(validateName(request.customerName()));
         order.setEmail(validateEmail(request.email()));
         order.setMobileNo(normalizeMobile(request.mobileNo()));
-        order.setStatus("PLACED");
+        order.setStatus(AppConstants.OrderStatus.PLACED);
         order.setOrderDate(LocalDate.now());
         order.setUserEmail(userEmail);
 
@@ -137,7 +139,6 @@ public class OrderService {
         );
     }
 
-
     @Transactional
     @Caching(evict = {
             @CacheEvict(value = "product", allEntries = true),
@@ -154,7 +155,7 @@ public class OrderService {
             throw new AccessDeniedException("You cannot cancel this order");
         }
 
-        if ("CANCELLED".equals(order.getStatus())) {
+        if (AppConstants.OrderStatus.CANCELLED.equals(order.getStatus())) {
             throw new OrderAlreadyCancelledException(orderId);
         }
 
@@ -170,7 +171,7 @@ public class OrderService {
 
         productRepo.saveAll(updatedProducts);
 
-        order.setStatus("CANCELLED");
+        order.setStatus(AppConstants.OrderStatus.CANCELLED);
 
         Order saved = orderRepo.save(order);
 
@@ -286,4 +287,3 @@ public class OrderService {
         );
     }
 }
-

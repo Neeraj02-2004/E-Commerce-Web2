@@ -15,9 +15,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.cache.CacheManager;
+import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -34,9 +36,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@Testcontainers
+@Testcontainers(disabledWithoutDocker = true)
 @SpringBootTest
 @AutoConfigureMockMvc
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class OrderPlacementIntegrationTest {
 
     private static final String USER_EMAIL = "buyer@example.com";
@@ -64,6 +67,8 @@ class OrderPlacementIntegrationTest {
         registry.add("spring.cache.type", () -> "redis");
         registry.add("spring.data.redis.host", redis::getHost);
         registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
+        registry.add("spring.data.redis.timeout", () -> "2s");
+        registry.add("spring.data.redis.lettuce.shutdown-timeout", () -> "100ms");
 
         registry.add("app.jwt.secret", () -> "bFJiTGtSdXFXcXJyQkRCZVNnRys4MXlsNEdINkFmQVdYTWFiWWxtbCtNPQ==");
         registry.add("app.jwt.expiration-ms", () -> "3600000");
@@ -106,10 +111,11 @@ class OrderPlacementIntegrationTest {
         productRepo.deleteAll();
         userRepo.deleteAll();
 
-        stringRedisTemplate.getConnectionFactory()
-                .getConnection()
-                .serverCommands()
-                .flushDb();
+        try (RedisConnection connection = stringRedisTemplate
+                .getRequiredConnectionFactory()
+                .getConnection()) {
+            connection.serverCommands().flushDb();
+        }
 
         User user = new User();
         user.setUsername("Buyer");

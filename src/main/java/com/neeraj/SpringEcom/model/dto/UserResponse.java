@@ -1,4 +1,4 @@
-package com.neeraj.SpringEcom.dto;
+package com.neeraj.SpringEcom.model.dto;
 
 public record UserResponse(
         Integer id,
