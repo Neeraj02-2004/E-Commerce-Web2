@@ -12,7 +12,9 @@ const CheckoutPopup = ({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [mobile, setMobile] = useState("");
+  const [address, setAddress] = useState("");
   const [error, setError] = useState("");
+
   const [popup, setPopup] = useState({
     show: false,
     message: "",
@@ -35,25 +37,58 @@ const CheckoutPopup = ({
     }, 2500);
   };
 
+  const resetForm = () => {
+    setName("");
+    setEmail("");
+    setMobile("");
+    setAddress("");
+    setError("");
+  };
+
   const handleConfirm = async () => {
-    if (!name || !email || !mobile) {
+    const cleanName = name.trim();
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanMobile = mobile.trim();
+    const cleanAddress = address.trim();
+
+    if (!cleanName || !cleanEmail || !cleanMobile || !cleanAddress) {
       setError("All fields are required!");
       showPopup("All fields are required", "error");
       return;
     }
 
-    if (!/^[6-9]\d{9}$/.test(mobile)) {
+    if (cleanName.length < 2 || cleanName.length > 80) {
+      setError("Name must be between 2 and 80 characters");
+      showPopup("Name must be between 2 and 80 characters", "error");
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      setError("Enter valid email address");
+      showPopup("Enter valid email address", "error");
+      return;
+    }
+
+    if (!/^[6-9]\d{9}$/.test(cleanMobile)) {
       setError("Enter valid mobile number");
       showPopup("Enter valid mobile number", "error");
+      return;
+    }
+
+    if (cleanAddress.length < 10 || cleanAddress.length > 500) {
+      setError("Address must be between 10 and 500 characters");
+      showPopup("Address must be between 10 and 500 characters", "error");
       return;
     }
 
     setError("");
 
     const orderData = {
-      customerName: name,
-      email: email,
-      mobileNo: mobile,
+      customerName: cleanName,
+      email: cleanEmail,
+      mobileNo: cleanMobile,
+      address: cleanAddress,
+      paymentMode: "CASH_ON_DELIVERY",
       items: cartItems.map((item) => ({
         productId: item.id,
         quantity: item.quantity,
@@ -67,6 +102,7 @@ const CheckoutPopup = ({
       showPopup("Order placed successfully", "success");
 
       setTimeout(() => {
+        resetForm();
         onOrderSuccess();
       }, 900);
     } catch (err) {
@@ -108,6 +144,7 @@ const CheckoutPopup = ({
                   alt={item.name}
                   style={{ width: "150px", marginRight: "10px" }}
                 />
+
                 <div>
                   <b>
                     <p>{item.name}</p>
@@ -144,6 +181,21 @@ const CheckoutPopup = ({
               maxLength={10}
               value={mobile}
               onChange={(e) => setMobile(e.target.value.replace(/\D/g, ""))}
+            />
+
+            <textarea
+              className="form-control mb-2"
+              placeholder="Delivery Address"
+              rows={3}
+              maxLength={500}
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+            />
+
+            <input
+              className="form-control mb-2"
+              value="Cash on Delivery"
+              readOnly
             />
 
             {error && <p style={{ color: "red" }}>{error}</p>}

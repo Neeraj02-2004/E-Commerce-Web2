@@ -80,6 +80,14 @@ const OrderStatus = () => {
     }
   };
 
+  const formatPaymentMode = (paymentMode) => {
+    if (paymentMode === "CASH_ON_DELIVERY") {
+      return "Cash on Delivery";
+    }
+
+    return paymentMode || "Not available";
+  };
+
   if (loading) {
     return (
       <>
@@ -148,6 +156,15 @@ const OrderStatus = () => {
 
                 <p>
                   <strong>Mobile:</strong> {order.mobileNo}
+                </p>
+
+                <p>
+                  <strong>Address:</strong> {order.address || "Not available"}
+                </p>
+
+                <p>
+                  <strong>Payment Mode:</strong>{" "}
+                  {formatPaymentMode(order.paymentMode)}
                 </p>
 
                 <p>
