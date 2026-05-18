@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import API from "../axios";
 import { useNavigate } from "react-router-dom";
 

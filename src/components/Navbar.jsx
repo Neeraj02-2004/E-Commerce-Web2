@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import axios, { API_ORIGIN } from "../axios";
 
-const Navbar = ({ onSelectCategory, onSearch, onLogout }) => {
+const Navbar = ({ onSelectCategory, onLogout }) => {
   const getInitialTheme = () => {
     const storedTheme = localStorage.getItem("theme");
     return storedTheme ? storedTheme : "light-theme";
@@ -14,7 +14,7 @@ const Navbar = ({ onSelectCategory, onSearch, onLogout }) => {
     return { username, email };
   };
 
-  const [selectedCategory, setSelectedCategory] = useState("");
+  const [, setSelectedCategory] = useState("");
   const [theme, setTheme] = useState(getInitialTheme());
   const [input, setInput] = useState("");
   const [searchResults, setSearchResults] = useState([]);
@@ -48,6 +48,16 @@ const Navbar = ({ onSelectCategory, onSearch, onLogout }) => {
     }, 2500);
   };
 
+  const fetchData = async () => {
+    try {
+      const response = await axios.get(`${API_ORIGIN}/api/products`);
+      setSearchResults(response.data);
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      showPopup("Failed to load products", "error");
+    }
+  };
+
   useEffect(() => {
     fetchData();
     setUserInfo(getUserInfo());
@@ -56,16 +66,6 @@ const Navbar = ({ onSelectCategory, onSearch, onLogout }) => {
   useEffect(() => {
     document.body.className = theme;
   }, [theme]);
-
-  const fetchData = async () => {
-    try {
-      const response = await axios.get("${API_ORIGIN}/api/products");
-      setSearchResults(response.data);
-    } catch (error) {
-      console.error("Error fetching data:", error);
-      showPopup("Failed to load products", "error");
-    }
-  };
 
   const handleChange = async (value) => {
     setInput(value);

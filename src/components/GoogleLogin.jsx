@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import API, { API_ORIGIN } from "../axios";
+import { useEffect, useState } from "react";
+import { API_ORIGIN } from "../axios";
 
 function GoogleLogin({ onSuccess, onFailure }) {
   const [popup, setPopup] = useState({
@@ -24,28 +24,9 @@ function GoogleLogin({ onSuccess, onFailure }) {
     }, 2500);
   };
 
-  useEffect(() => {
-    if (!window.google) {
-      showPopup("Google login is not available", "error");
-      return;
-    }
-
-    window.google.accounts.id.initialize({
-      client_id:
-        "531093496003-5trvu29u047dh091n2pdj35flpvdnpmq.apps.googleusercontent.com",
-      callback: handleCredentialResponse,
-    });
-
-    window.google.accounts.id.renderButton(document.getElementById("googleBtn"), {
-      theme: "outline",
-      size: "large",
-      width: 280,
-    });
-  }, []);
-
   const handleCredentialResponse = async (response) => {
     try {
-      const res = await fetch("${API_ORIGIN}/api/login/google", {
+      const res = await fetch(`${API_ORIGIN}/api/login/google`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -73,6 +54,25 @@ function GoogleLogin({ onSuccess, onFailure }) {
       }
     }
   };
+
+  useEffect(() => {
+    if (!window.google) {
+      showPopup("Google login is not available", "error");
+      return;
+    }
+
+    window.google.accounts.id.initialize({
+      client_id:
+        "531093496003-5trvu29u047dh091n2pdj35flpvdnpmq.apps.googleusercontent.com",
+      callback: handleCredentialResponse,
+    });
+
+    window.google.accounts.id.renderButton(document.getElementById("googleBtn"), {
+      theme: "outline",
+      size: "large",
+      width: 280,
+    });
+  }, []);
 
   return (
     <div style={styles.googleBtn}>

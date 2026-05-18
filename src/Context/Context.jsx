@@ -8,11 +8,11 @@ const AppContext = createContext({
   isAdmin: false,
   token: null,
   role: "USER",
-  addToCart: (product) => {},
-  removeFromCart: (productId) => {},
+  addToCart: () => {},
+  removeFromCart: () => {},
   refreshData: () => {},
   clearCart: () => {},
-  removeMultipleFromCart: (ids) => {},
+  removeMultipleFromCart: () => {},
   refreshAuth: () => {},
 });
 

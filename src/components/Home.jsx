@@ -1,9 +1,9 @@
-import React, { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import AppContext from "../Context/Context";
 import unplugged from "../assets/unplugged.png";
-import API, { API_ORIGIN } from "../axios";
+import { API_ORIGIN } from "../axios";
 
 const Home = ({ selectedCategory }) => {
   const { data, isError, addToCart, refreshData } = useContext(AppContext);
