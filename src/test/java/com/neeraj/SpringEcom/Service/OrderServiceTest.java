@@ -1,6 +1,7 @@
 package com.neeraj.SpringEcom.Service;
 
 import com.neeraj.SpringEcom.exception.InsufficientStockException;
+import com.neeraj.SpringEcom.exception.InvalidOrderException;
 import com.neeraj.SpringEcom.model.Order;
 import com.neeraj.SpringEcom.model.Product;
 import com.neeraj.SpringEcom.model.dto.OrderItemRequest;
@@ -33,6 +34,26 @@ class OrderServiceTest {
     @AfterEach
     void tearDown() {
         SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void placeOrder_whenProductIsUnavailable_shouldThrowAndNotSaveOrder() {
+        Product product = product(1, "Phone", 5);
+        product.setProductAvailable(false);
+
+        ProductRepo productRepo = mock(ProductRepo.class);
+        OrderRepo orderRepo = mock(OrderRepo.class);
+
+        when(productRepo.findByIdForUpdate(1)).thenReturn(Optional.of(product));
+
+        OrderService orderService = new OrderService(productRepo, orderRepo);
+        authenticate("buyer@example.com");
+
+        assertThatThrownBy(() -> orderService.placeOrder(orderRequest(1, 1)))
+                .isInstanceOf(InvalidOrderException.class)
+                .hasMessageContaining("Product is not available");
+
+        assertThat(product.getStockQuantity()).isEqualTo(5);
     }
 
     @Test

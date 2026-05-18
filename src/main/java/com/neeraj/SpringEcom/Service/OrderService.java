@@ -74,6 +74,10 @@ public class OrderService {
             Product product = productRepo.findByIdForUpdate(itemReq.productId())
                     .orElseThrow(() -> new ProductNotFoundException(itemReq.productId()));
 
+            if (!product.isProductAvailable()) {
+                throw new InvalidOrderException("Product is not available: " + product.getName());
+            }
+
             int updatedStock = product.getStockQuantity() - itemReq.quantity();
 
             if (updatedStock < 0) {

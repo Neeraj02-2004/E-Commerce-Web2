@@ -14,7 +14,12 @@ WORKDIR /app
 
 COPY --from=build /app/target/*.jar app.jar
 
-RUN mkdir -p /app/uploads/products
+RUN mkdir -p /app/uploads/products \
+    && groupadd --system springecom \
+    && useradd --system --gid springecom springecom \
+    && chown -R springecom:springecom /app
+
+USER springecom
 
 EXPOSE 8080
 
