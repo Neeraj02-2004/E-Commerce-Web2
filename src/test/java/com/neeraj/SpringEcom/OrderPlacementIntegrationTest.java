@@ -143,6 +143,8 @@ class OrderPlacementIntegrationTest {
                 "Neeraj Kumar",
                 USER_EMAIL,
                 "9876543210",
+                "123 Main Road, Delhi, India",
+                "CASH_ON_DELIVERY",
                 List.of(new OrderItemRequest(savedProduct.getId(), 2))
         );
 
@@ -156,6 +158,9 @@ class OrderPlacementIntegrationTest {
                 .andExpect(jsonPath("$.orderId").exists())
                 .andExpect(jsonPath("$.customerName").value("Neeraj Kumar"))
                 .andExpect(jsonPath("$.email").value(USER_EMAIL))
+                .andExpect(jsonPath("$.mobileNo").value("9876543210"))
+                .andExpect(jsonPath("$.address").value("123 Main Road, Delhi, India"))
+                .andExpect(jsonPath("$.paymentMode").value("CASH_ON_DELIVERY"))
                 .andExpect(jsonPath("$.status").value("PLACED"))
                 .andExpect(jsonPath("$.items[0].productName").value("Test Phone"))
                 .andExpect(jsonPath("$.items[0].quantity").value(2));

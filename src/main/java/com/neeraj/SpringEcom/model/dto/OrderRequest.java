@@ -23,6 +23,14 @@ public record OrderRequest(
         @Pattern(regexp = "^[6-9]\\d{9}$", message = "Mobile number must be a valid 10 digit Indian number")
         String mobileNo,
 
+        @NotBlank(message = "Address is required")
+        @Size(min = 10, max = 500, message = "Address must be between 10 and 500 characters")
+        String address,
+
+        @NotBlank(message = "Payment mode is required")
+        @Size(max = 50, message = "Payment mode must not exceed 50 characters")
+        String paymentMode,
+
         @NotEmpty(message = "Order must contain at least one item")
         List<@Valid OrderItemRequest> items
 ) {

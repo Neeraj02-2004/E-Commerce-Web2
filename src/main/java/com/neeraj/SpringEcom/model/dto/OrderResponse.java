@@ -8,6 +8,8 @@ public record OrderResponse(
         String customerName,
         String email,
         String mobileNo,
+        String address,
+        String paymentMode,
         String status,
         LocalDate orderDate,
         List<OrderItemResponse> items

@@ -186,10 +186,11 @@ class OrderServiceTest {
                 "Neeraj Kumar",
                 "buyer@example.com",
                 "9876543210",
+                "123 Main Road, Delhi, India",
+                "CASH_ON_DELIVERY",
                 List.of(new OrderItemRequest(productId, quantity))
         );
     }
-
     private static Product product(int id, String name, int stock) {
         Product product = new Product();
         product.setId(id);

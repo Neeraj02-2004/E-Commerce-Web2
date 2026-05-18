@@ -29,4 +29,11 @@ public final class AppConstants {
         private OrderStatus() {
         }
     }
+
+    public static final class PaymentMode {
+        public static final String CASH_ON_DELIVERY = "CASH_ON_DELIVERY";
+
+        private PaymentMode() {
+        }
+    }
 }

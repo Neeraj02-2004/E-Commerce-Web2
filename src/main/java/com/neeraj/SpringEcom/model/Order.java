@@ -50,6 +50,14 @@ public class Order {
     @Column(nullable = false, length = 10)
     private String mobileNo;
 
+    @NotBlank(message = "Address is required")
+    @Size(min = 10, max = 500, message = "Address must be between 10 and 500 characters")
+    @Column(nullable = false, length = 500)
+    private String address;
+
+    @Column(nullable = false, length = 50)
+    private String paymentMode;
+
     @Column(nullable = false)
     private String status;
 

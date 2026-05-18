@@ -61,6 +61,8 @@ public class OrderService {
         order.setCustomerName(validateName(request.customerName()));
         order.setEmail(validateEmail(request.email()));
         order.setMobileNo(normalizeMobile(request.mobileNo()));
+        order.setAddress(validateAddress(request.address()));
+        order.setPaymentMode(validatePaymentMode(request.paymentMode()));
         order.setStatus(AppConstants.OrderStatus.PLACED);
         order.setOrderDate(LocalDate.now());
         order.setUserEmail(userEmail);
@@ -270,6 +272,38 @@ public class OrderService {
         throw new InvalidOrderException("Invalid mobile number format");
     }
 
+    private String validateAddress(String address) {
+        if (address == null || address.isBlank()) {
+            throw new InvalidOrderException("Address is required");
+        }
+
+        String cleanAddress = address.trim().replaceAll("\\s+", " ");
+
+        if (cleanAddress.length() < 10 || cleanAddress.length() > 500) {
+            throw new InvalidOrderException("Address must be between 10 and 500 characters");
+        }
+
+        return cleanAddress;
+    }
+
+    private String validatePaymentMode(String paymentMode) {
+        if (paymentMode == null || paymentMode.isBlank()) {
+            throw new InvalidOrderException("Payment mode is required");
+        }
+
+        String cleanPaymentMode = paymentMode.trim().toUpperCase().replace(" ", "_");
+
+        if ("COD".equals(cleanPaymentMode)) {
+            cleanPaymentMode = AppConstants.PaymentMode.CASH_ON_DELIVERY;
+        }
+
+        if (!AppConstants.PaymentMode.CASH_ON_DELIVERY.equals(cleanPaymentMode)) {
+            throw new InvalidOrderException("Only cash on delivery payment is supported");
+        }
+
+        return cleanPaymentMode;
+    }
+
     private OrderResponse toResponse(Order order) {
         List<OrderItemResponse> itemResponses = order.getOrderItems()
                 .stream()
@@ -285,6 +319,8 @@ public class OrderService {
                 order.getCustomerName(),
                 order.getEmail(),
                 order.getMobileNo(),
+                order.getAddress(),
+                order.getPaymentMode(),
                 order.getStatus(),
                 order.getOrderDate(),
                 itemResponses
