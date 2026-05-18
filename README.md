@@ -40,6 +40,7 @@ DB_PASSWORD=change-me-strong-db-password
 GOOGLE_CLIENT_ID=change-me-google-client-id
 GOOGLE_CLIENT_SECRET=change-me-google-client-secret
 
-JWT_SECRET=change-me-base64-256-bit-secret
+JWT_SECRET=change-me-base64-256-bi
+t-secret
 
 CORS_ORIGINS=http://localhost:5173
