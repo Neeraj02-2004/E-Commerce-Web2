@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import AppContext from "../Context/Context";
 import unplugged from "../assets/unplugged.png";
+import API, { API_ORIGIN } from "../axios";
 
 const Home = ({ selectedCategory }) => {
   const { data, isError, addToCart, refreshData } = useContext(AppContext);
@@ -54,7 +55,7 @@ const Home = ({ selectedCategory }) => {
       return product.imageUrl;
     }
 
-    return `http://localhost:8080${product.imageUrl}`;
+    return `${API_ORIGIN}${product.imageUrl}`;
   };
 
   const handleAddToCart = (product) => {

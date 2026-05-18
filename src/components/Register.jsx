@@ -34,7 +34,7 @@ function Register() {
     e.preventDefault();
 
     try {
-      const res = await fetch("http://localhost:8080/api/register", {
+      const res = await fetch("${API_ORIGIN}/api/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, email, password }),

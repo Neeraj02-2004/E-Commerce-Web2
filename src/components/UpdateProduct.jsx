@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import axios from "axios";
+import axios, { API_ORIGIN } from "../axios";
 
 const UpdateProduct = () => {
   const { id } = useParams();
@@ -60,7 +60,7 @@ const UpdateProduct = () => {
     const fetchProduct = async () => {
       try {
         const response = await axios.get(
-          `http://localhost:8080/api/product/${id}`
+          `${API_ORIGIN}/api/product/${id}`
         );
 
         const data = response.data;
@@ -79,7 +79,7 @@ const UpdateProduct = () => {
         });
 
         if (data.imageUrl) {
-          setExistingImageUrl(`http://localhost:8080${data.imageUrl}`);
+          setExistingImageUrl(`${API_ORIGIN}${data.imageUrl}`);
         }
       } catch (error) {
         console.error("Error fetching product:", error);
@@ -117,7 +117,7 @@ const UpdateProduct = () => {
 
     try {
       await axios.put(
-        `http://localhost:8080/api/admin/product/${id}`,
+        `${API_ORIGIN}/api/admin/product/${id}`,
         formData,
         {
           headers: {

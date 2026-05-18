@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+import axios, { API_ORIGIN } from "../axios";
 
 const Navbar = ({ onSelectCategory, onSearch, onLogout }) => {
   const getInitialTheme = () => {
@@ -59,7 +59,7 @@ const Navbar = ({ onSelectCategory, onSearch, onLogout }) => {
 
   const fetchData = async () => {
     try {
-      const response = await axios.get("http://localhost:8080/api/products");
+      const response = await axios.get("${API_ORIGIN}/api/products");
       setSearchResults(response.data);
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -75,7 +75,7 @@ const Navbar = ({ onSelectCategory, onSearch, onLogout }) => {
 
       try {
         const response = await axios.get(
-          `http://localhost:8080/api/products/search?keyword=${value}`
+          `${API_ORIGIN}/api/products/search?keyword=${value}`
         );
 
         setSearchResults(response.data);

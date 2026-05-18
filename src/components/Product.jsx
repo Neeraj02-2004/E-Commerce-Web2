@@ -1,7 +1,7 @@
 import { useNavigate, useParams } from "react-router-dom";
 import { useContext, useEffect, useState } from "react";
 import AppContext from "../Context/Context";
-import axios from "../axios";
+import axios, { API_ORIGIN } from "../axios";
 import {
   addToWishlist,
   getWishlist,
@@ -44,7 +44,7 @@ const Product = () => {
         setProduct(response.data);
 
         if (response.data.imageUrl) {
-          setImageUrl(`http://localhost:8080${response.data.imageUrl}`);
+          setImageUrl(`${API_ORIGIN}${response.data.imageUrl}`);
         }
       } catch (error) {
         console.error("Error fetching product:", error);

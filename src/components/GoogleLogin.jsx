@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import API, { API_ORIGIN } from "../axios";
 
 function GoogleLogin({ onSuccess, onFailure }) {
   const [popup, setPopup] = useState({
@@ -44,7 +45,7 @@ function GoogleLogin({ onSuccess, onFailure }) {
 
   const handleCredentialResponse = async (response) => {
     try {
-      const res = await fetch("http://localhost:8080/api/login/google", {
+      const res = await fetch("${API_ORIGIN}/api/login/google", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
