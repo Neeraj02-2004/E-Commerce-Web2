@@ -1,5 +1,6 @@
 package com.neeraj.SpringEcom.model.dto;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 public record ReturnExchangeResponse(
@@ -11,6 +12,12 @@ public record ReturnExchangeResponse(
         String status,
         String refundStatus,
         String adminNote,
+        String gatewayRefundId,
+        BigDecimal refundAmount,
+        LocalDateTime approvedAt,
+        LocalDateTime completedAt,
+        LocalDateTime refundProcessedAt,
+        String refundFailureReason,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {

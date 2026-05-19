@@ -72,6 +72,7 @@ public final class AppConstants {
         public static final String REFUND_PROCESSING = "REFUND_PROCESSING";
         public static final String MANUAL_REFUND_REQUIRED = "MANUAL_REFUND_REQUIRED";
         public static final String REFUNDED = "REFUNDED";
+        public static final String REFUND_FAILED = "REFUND_FAILED";
 
         private RefundStatus() {
         }

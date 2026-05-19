@@ -16,6 +16,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -39,6 +40,7 @@ class ReturnExchangeServiceTest {
     void createRequest_forDeliveredOrder_shouldCreateReturnRequest() {
         ReturnExchangeRepo returnExchangeRepo = mock(ReturnExchangeRepo.class);
         OrderRepo orderRepo = mock(OrderRepo.class);
+        PaymentService paymentService = mock(PaymentService.class);
 
         Order order = deliveredOrder("ORD123", "buyer@example.com");
 
@@ -60,7 +62,11 @@ class ReturnExchangeServiceTest {
 
         authenticate("buyer@example.com");
 
-        ReturnExchangeService service = new ReturnExchangeService(returnExchangeRepo, orderRepo);
+        ReturnExchangeService service = new ReturnExchangeService(
+                returnExchangeRepo,
+                orderRepo,
+                paymentService
+        );
 
         ReturnExchangeResponse response = service.createRequest(
                 "ORD123",
@@ -82,6 +88,7 @@ class ReturnExchangeServiceTest {
     void createRequest_forExchange_shouldCreateExchangeRequest() {
         ReturnExchangeRepo returnExchangeRepo = mock(ReturnExchangeRepo.class);
         OrderRepo orderRepo = mock(OrderRepo.class);
+        PaymentService paymentService = mock(PaymentService.class);
 
         Order order = deliveredOrder("ORD123", "buyer@example.com");
 
@@ -103,7 +110,11 @@ class ReturnExchangeServiceTest {
 
         authenticate("buyer@example.com");
 
-        ReturnExchangeService service = new ReturnExchangeService(returnExchangeRepo, orderRepo);
+        ReturnExchangeService service = new ReturnExchangeService(
+                returnExchangeRepo,
+                orderRepo,
+                paymentService
+        );
 
         ReturnExchangeResponse response = service.createRequest(
                 "ORD123",
@@ -121,6 +132,7 @@ class ReturnExchangeServiceTest {
     void createRequest_forNonDeliveredOrder_shouldThrow() {
         ReturnExchangeRepo returnExchangeRepo = mock(ReturnExchangeRepo.class);
         OrderRepo orderRepo = mock(OrderRepo.class);
+        PaymentService paymentService = mock(PaymentService.class);
 
         Order order = deliveredOrder("ORD123", "buyer@example.com");
         order.setStatus(AppConstants.OrderStatus.PLACED);
@@ -129,7 +141,11 @@ class ReturnExchangeServiceTest {
 
         authenticate("buyer@example.com");
 
-        ReturnExchangeService service = new ReturnExchangeService(returnExchangeRepo, orderRepo);
+        ReturnExchangeService service = new ReturnExchangeService(
+                returnExchangeRepo,
+                orderRepo,
+                paymentService
+        );
 
         assertThatThrownBy(() -> service.createRequest(
                 "ORD123",
@@ -146,6 +162,7 @@ class ReturnExchangeServiceTest {
     void createRequest_afterReturnWindowExpired_shouldThrow() {
         ReturnExchangeRepo returnExchangeRepo = mock(ReturnExchangeRepo.class);
         OrderRepo orderRepo = mock(OrderRepo.class);
+        PaymentService paymentService = mock(PaymentService.class);
 
         Order order = deliveredOrder("ORD123", "buyer@example.com");
         order.setDeliveredAt(LocalDateTime.now().minusDays(8));
@@ -154,7 +171,11 @@ class ReturnExchangeServiceTest {
 
         authenticate("buyer@example.com");
 
-        ReturnExchangeService service = new ReturnExchangeService(returnExchangeRepo, orderRepo);
+        ReturnExchangeService service = new ReturnExchangeService(
+                returnExchangeRepo,
+                orderRepo,
+                paymentService
+        );
 
         assertThatThrownBy(() -> service.createRequest(
                 "ORD123",
@@ -171,6 +192,7 @@ class ReturnExchangeServiceTest {
     void createRequest_forDifferentUserOrder_shouldThrowAccessDenied() {
         ReturnExchangeRepo returnExchangeRepo = mock(ReturnExchangeRepo.class);
         OrderRepo orderRepo = mock(OrderRepo.class);
+        PaymentService paymentService = mock(PaymentService.class);
 
         Order order = deliveredOrder("ORD123", "owner@example.com");
 
@@ -178,7 +200,11 @@ class ReturnExchangeServiceTest {
 
         authenticate("buyer@example.com");
 
-        ReturnExchangeService service = new ReturnExchangeService(returnExchangeRepo, orderRepo);
+        ReturnExchangeService service = new ReturnExchangeService(
+                returnExchangeRepo,
+                orderRepo,
+                paymentService
+        );
 
         assertThatThrownBy(() -> service.createRequest(
                 "ORD123",
@@ -195,12 +221,17 @@ class ReturnExchangeServiceTest {
     void createRequest_forMissingOrder_shouldThrow() {
         ReturnExchangeRepo returnExchangeRepo = mock(ReturnExchangeRepo.class);
         OrderRepo orderRepo = mock(OrderRepo.class);
+        PaymentService paymentService = mock(PaymentService.class);
 
         when(orderRepo.findByOrderId("ORD404")).thenReturn(Optional.empty());
 
         authenticate("buyer@example.com");
 
-        ReturnExchangeService service = new ReturnExchangeService(returnExchangeRepo, orderRepo);
+        ReturnExchangeService service = new ReturnExchangeService(
+                returnExchangeRepo,
+                orderRepo,
+                paymentService
+        );
 
         assertThatThrownBy(() -> service.createRequest(
                 "ORD404",
@@ -216,6 +247,7 @@ class ReturnExchangeServiceTest {
     void approveReturnRequest_forOnlinePaidOrder_shouldSetRefundProcessing() {
         ReturnExchangeRepo returnExchangeRepo = mock(ReturnExchangeRepo.class);
         OrderRepo orderRepo = mock(OrderRepo.class);
+        PaymentService paymentService = mock(PaymentService.class);
 
         ReturnExchangeRequest entity = returnRequest(
                 AppConstants.ReturnExchangeStatus.REQUESTED,
@@ -227,7 +259,11 @@ class ReturnExchangeServiceTest {
         when(returnExchangeRepo.save(any(ReturnExchangeRequest.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        ReturnExchangeService service = new ReturnExchangeService(returnExchangeRepo, orderRepo);
+        ReturnExchangeService service = new ReturnExchangeService(
+                returnExchangeRepo,
+                orderRepo,
+                paymentService
+        );
 
         ReturnExchangeResponse response = service.approveRequest(
                 "REX123",
@@ -237,12 +273,14 @@ class ReturnExchangeServiceTest {
         assertThat(response.status()).isEqualTo(AppConstants.ReturnExchangeStatus.APPROVED);
         assertThat(response.refundStatus()).isEqualTo(AppConstants.RefundStatus.REFUND_PROCESSING);
         assertThat(response.adminNote()).isEqualTo("Approved by admin");
+        assertThat(response.approvedAt()).isNotNull();
     }
 
     @Test
     void approveReturnRequest_forCodOrder_shouldSetManualRefundRequired() {
         ReturnExchangeRepo returnExchangeRepo = mock(ReturnExchangeRepo.class);
         OrderRepo orderRepo = mock(OrderRepo.class);
+        PaymentService paymentService = mock(PaymentService.class);
 
         ReturnExchangeRequest entity = returnRequest(
                 AppConstants.ReturnExchangeStatus.REQUESTED,
@@ -254,7 +292,11 @@ class ReturnExchangeServiceTest {
         when(returnExchangeRepo.save(any(ReturnExchangeRequest.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        ReturnExchangeService service = new ReturnExchangeService(returnExchangeRepo, orderRepo);
+        ReturnExchangeService service = new ReturnExchangeService(
+                returnExchangeRepo,
+                orderRepo,
+                paymentService
+        );
 
         ReturnExchangeResponse response = service.approveRequest(
                 "REX123",
@@ -263,12 +305,14 @@ class ReturnExchangeServiceTest {
 
         assertThat(response.status()).isEqualTo(AppConstants.ReturnExchangeStatus.APPROVED);
         assertThat(response.refundStatus()).isEqualTo(AppConstants.RefundStatus.MANUAL_REFUND_REQUIRED);
+        assertThat(response.approvedAt()).isNotNull();
     }
 
     @Test
     void rejectRequest_shouldSetRejected() {
         ReturnExchangeRepo returnExchangeRepo = mock(ReturnExchangeRepo.class);
         OrderRepo orderRepo = mock(OrderRepo.class);
+        PaymentService paymentService = mock(PaymentService.class);
 
         ReturnExchangeRequest entity = returnRequest(
                 AppConstants.ReturnExchangeStatus.REQUESTED,
@@ -280,7 +324,11 @@ class ReturnExchangeServiceTest {
         when(returnExchangeRepo.save(any(ReturnExchangeRequest.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        ReturnExchangeService service = new ReturnExchangeService(returnExchangeRepo, orderRepo);
+        ReturnExchangeService service = new ReturnExchangeService(
+                returnExchangeRepo,
+                orderRepo,
+                paymentService
+        );
 
         ReturnExchangeResponse response = service.rejectRequest(
                 "REX123",
@@ -293,9 +341,10 @@ class ReturnExchangeServiceTest {
     }
 
     @Test
-    void completeApprovedReturnRequest_shouldSetCompletedAndRefunded() {
+    void completeApprovedReturnRequest_shouldCallRazorpayRefundAndSetCompletedAndRefunded() {
         ReturnExchangeRepo returnExchangeRepo = mock(ReturnExchangeRepo.class);
         OrderRepo orderRepo = mock(OrderRepo.class);
+        PaymentService paymentService = mock(PaymentService.class);
 
         ReturnExchangeRequest entity = returnRequest(
                 AppConstants.ReturnExchangeStatus.APPROVED,
@@ -305,10 +354,20 @@ class ReturnExchangeServiceTest {
         entity.setRefundStatus(AppConstants.RefundStatus.REFUND_PROCESSING);
 
         when(returnExchangeRepo.findByRequestId("REX123")).thenReturn(Optional.of(entity));
+        when(paymentService.refundOnlinePayment(entity.getOrder(), entity.getRequestId()))
+                .thenReturn(new PaymentService.RefundResult(
+                        "rfnd_test_123",
+                        new BigDecimal("100.00"),
+                        LocalDateTime.now()
+                ));
         when(returnExchangeRepo.save(any(ReturnExchangeRequest.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        ReturnExchangeService service = new ReturnExchangeService(returnExchangeRepo, orderRepo);
+        ReturnExchangeService service = new ReturnExchangeService(
+                returnExchangeRepo,
+                orderRepo,
+                paymentService
+        );
 
         ReturnExchangeResponse response = service.completeRequest(
                 "REX123",
@@ -317,6 +376,45 @@ class ReturnExchangeServiceTest {
 
         assertThat(response.status()).isEqualTo(AppConstants.ReturnExchangeStatus.COMPLETED);
         assertThat(response.refundStatus()).isEqualTo(AppConstants.RefundStatus.REFUNDED);
+        assertThat(response.gatewayRefundId()).isEqualTo("rfnd_test_123");
+        assertThat(response.refundAmount()).isEqualByComparingTo("100.00");
+        assertThat(response.completedAt()).isNotNull();
+        assertThat(response.refundProcessedAt()).isNotNull();
+    }
+
+    @Test
+    void completeApprovedReturnRequest_whenRazorpayRefundFails_shouldSetRefundFailedAndKeepApproved() {
+        ReturnExchangeRepo returnExchangeRepo = mock(ReturnExchangeRepo.class);
+        OrderRepo orderRepo = mock(OrderRepo.class);
+        PaymentService paymentService = mock(PaymentService.class);
+
+        ReturnExchangeRequest entity = returnRequest(
+                AppConstants.ReturnExchangeStatus.APPROVED,
+                AppConstants.PaymentMode.ONLINE,
+                AppConstants.PaymentStatus.PAID
+        );
+        entity.setRefundStatus(AppConstants.RefundStatus.REFUND_PROCESSING);
+
+        when(returnExchangeRepo.findByRequestId("REX123")).thenReturn(Optional.of(entity));
+        when(paymentService.refundOnlinePayment(entity.getOrder(), entity.getRequestId()))
+                .thenThrow(new InvalidOrderException("Unable to process Razorpay refund"));
+        when(returnExchangeRepo.save(any(ReturnExchangeRequest.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        ReturnExchangeService service = new ReturnExchangeService(
+                returnExchangeRepo,
+                orderRepo,
+                paymentService
+        );
+
+        ReturnExchangeResponse response = service.completeRequest(
+                "REX123",
+                new ReturnExchangeDecisionRequest("Completed")
+        );
+
+        assertThat(response.status()).isEqualTo(AppConstants.ReturnExchangeStatus.APPROVED);
+        assertThat(response.refundStatus()).isEqualTo(AppConstants.RefundStatus.REFUND_FAILED);
+        assertThat(response.refundFailureReason()).isEqualTo("Unable to process Razorpay refund");
     }
 
     private static void authenticate(String email) {

@@ -15,6 +15,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Getter
@@ -55,6 +56,21 @@ public class ReturnExchangeRequest {
 
     @Column(length = 1000)
     private String adminNote;
+
+    @Column(length = 100)
+    private String gatewayRefundId;
+
+    @Column(precision = 12, scale = 2)
+    private BigDecimal refundAmount;
+
+    private LocalDateTime approvedAt;
+
+    private LocalDateTime completedAt;
+
+    private LocalDateTime refundProcessedAt;
+
+    @Column(length = 1000)
+    private String refundFailureReason;
 
     @Column(nullable = false)
     private LocalDateTime createdAt;

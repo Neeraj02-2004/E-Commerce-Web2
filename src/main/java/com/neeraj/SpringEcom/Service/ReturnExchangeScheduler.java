@@ -14,9 +14,14 @@ import java.util.List;
 public class ReturnExchangeScheduler {
 
     private final ReturnExchangeRepo returnExchangeRepo;
+    private final ReturnExchangeService returnExchangeService;
 
-    public ReturnExchangeScheduler(ReturnExchangeRepo returnExchangeRepo) {
+    public ReturnExchangeScheduler(
+            ReturnExchangeRepo returnExchangeRepo,
+            ReturnExchangeService returnExchangeService
+    ) {
         this.returnExchangeRepo = returnExchangeRepo;
+        this.returnExchangeService = returnExchangeService;
     }
 
     @Scheduled(cron = "0 30 1 * * *")
@@ -35,11 +40,7 @@ public class ReturnExchangeScheduler {
         }
 
         for (ReturnExchangeRequest request : approvedRequests) {
-            request.setStatus(AppConstants.ReturnExchangeStatus.COMPLETED);
-
-            if (AppConstants.ReturnExchangeType.RETURN.equals(request.getRequestType())) {
-                request.setRefundStatus(AppConstants.RefundStatus.REFUNDED);
-            }
+            returnExchangeService.completeApprovedRequest(request, null);
         }
 
         returnExchangeRepo.saveAll(approvedRequests);

@@ -25,13 +25,16 @@ public class ReturnExchangeService {
 
     private final ReturnExchangeRepo returnExchangeRepo;
     private final OrderRepo orderRepo;
+    private final PaymentService paymentService;
 
     public ReturnExchangeService(
             ReturnExchangeRepo returnExchangeRepo,
-            OrderRepo orderRepo
+            OrderRepo orderRepo,
+            PaymentService paymentService
     ) {
         this.returnExchangeRepo = returnExchangeRepo;
         this.orderRepo = orderRepo;
+        this.paymentService = paymentService;
     }
 
     @Transactional
@@ -109,10 +112,11 @@ public class ReturnExchangeService {
 
         entity.setStatus(AppConstants.ReturnExchangeStatus.APPROVED);
         entity.setAdminNote(cleanAdminNote(request.adminNote()));
+        entity.setApprovedAt(LocalDateTime.now());
+        entity.setRefundFailureReason(null);
 
         if (AppConstants.ReturnExchangeType.RETURN.equals(entity.getRequestType())) {
-            if (AppConstants.PaymentMode.ONLINE.equals(entity.getOrder().getPaymentMode())
-                    && AppConstants.PaymentStatus.PAID.equals(entity.getOrder().getPaymentStatus())) {
+            if (isOnlinePaidOrder(entity.getOrder())) {
                 entity.setRefundStatus(AppConstants.RefundStatus.REFUND_PROCESSING);
             } else {
                 entity.setRefundStatus(AppConstants.RefundStatus.MANUAL_REFUND_REQUIRED);
@@ -136,6 +140,7 @@ public class ReturnExchangeService {
         entity.setStatus(AppConstants.ReturnExchangeStatus.REJECTED);
         entity.setAdminNote(cleanAdminNote(request.adminNote()));
         entity.setRefundStatus(AppConstants.RefundStatus.NOT_REQUIRED);
+        entity.setRefundFailureReason(null);
 
         return toResponse(returnExchangeRepo.save(entity));
     }
@@ -151,14 +156,61 @@ public class ReturnExchangeService {
             throw new InvalidOrderException("Only approved return/exchange can be completed");
         }
 
-        entity.setStatus(AppConstants.ReturnExchangeStatus.COMPLETED);
-        entity.setAdminNote(cleanAdminNote(request.adminNote()));
-
-        if (AppConstants.ReturnExchangeType.RETURN.equals(entity.getRequestType())) {
-            entity.setRefundStatus(AppConstants.RefundStatus.REFUNDED);
-        }
+        completeApprovedRequest(entity, cleanAdminNote(request.adminNote()));
 
         return toResponse(returnExchangeRepo.save(entity));
+    }
+
+    public void completeApprovedRequest(ReturnExchangeRequest entity, String adminNote) {
+        if (adminNote != null) {
+            entity.setAdminNote(adminNote);
+        }
+
+        if (AppConstants.ReturnExchangeType.EXCHANGE.equals(entity.getRequestType())) {
+            entity.setStatus(AppConstants.ReturnExchangeStatus.COMPLETED);
+            entity.setCompletedAt(LocalDateTime.now());
+            return;
+        }
+
+        if (!AppConstants.ReturnExchangeType.RETURN.equals(entity.getRequestType())) {
+            throw new InvalidOrderException("Invalid return/exchange request type");
+        }
+
+        if (isOnlinePaidOrder(entity.getOrder())) {
+            processOnlineRefund(entity);
+            return;
+        }
+
+        entity.setStatus(AppConstants.ReturnExchangeStatus.COMPLETED);
+        entity.setRefundStatus(AppConstants.RefundStatus.REFUNDED);
+        entity.setCompletedAt(LocalDateTime.now());
+        entity.setRefundProcessedAt(LocalDateTime.now());
+        entity.setRefundFailureReason(null);
+    }
+
+    private void processOnlineRefund(ReturnExchangeRequest entity) {
+        try {
+            PaymentService.RefundResult refundResult = paymentService.refundOnlinePayment(
+                    entity.getOrder(),
+                    entity.getRequestId()
+            );
+
+            entity.setGatewayRefundId(refundResult.gatewayRefundId());
+            entity.setRefundAmount(refundResult.refundAmount());
+            entity.setRefundProcessedAt(refundResult.refundProcessedAt());
+            entity.setRefundStatus(AppConstants.RefundStatus.REFUNDED);
+            entity.setStatus(AppConstants.ReturnExchangeStatus.COMPLETED);
+            entity.setCompletedAt(LocalDateTime.now());
+            entity.setRefundFailureReason(null);
+        } catch (InvalidOrderException e) {
+            entity.setRefundStatus(AppConstants.RefundStatus.REFUND_FAILED);
+            entity.setRefundFailureReason(e.getMessage());
+        }
+    }
+
+    private boolean isOnlinePaidOrder(Order order) {
+        return AppConstants.PaymentMode.ONLINE.equals(order.getPaymentMode())
+                && AppConstants.PaymentStatus.PAID.equals(order.getPaymentStatus());
     }
 
     private ReturnExchangeRequest getRequest(String requestId) {
@@ -239,6 +291,12 @@ public class ReturnExchangeService {
                 entity.getStatus(),
                 entity.getRefundStatus(),
                 entity.getAdminNote(),
+                entity.getGatewayRefundId(),
+                entity.getRefundAmount(),
+                entity.getApprovedAt(),
+                entity.getCompletedAt(),
+                entity.getRefundProcessedAt(),
+                entity.getRefundFailureReason(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()
         );

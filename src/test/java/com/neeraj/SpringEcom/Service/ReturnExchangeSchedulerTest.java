@@ -26,6 +26,9 @@ class ReturnExchangeSchedulerTest {
     @Mock
     private ReturnExchangeRepo returnExchangeRepo;
 
+    @Mock
+    private ReturnExchangeService returnExchangeService;
+
     @InjectMocks
     private ReturnExchangeScheduler returnExchangeScheduler;
 
@@ -44,9 +47,7 @@ class ReturnExchangeSchedulerTest {
 
         returnExchangeScheduler.completeApprovedReturnExchangeRequests();
 
-        assertThat(request.getStatus()).isEqualTo(AppConstants.ReturnExchangeStatus.COMPLETED);
-        assertThat(request.getRefundStatus()).isEqualTo(AppConstants.RefundStatus.REFUNDED);
-
+        verify(returnExchangeService).completeApprovedRequest(request, null);
         verify(returnExchangeRepo).saveAll(List.of(request));
     }
 
@@ -65,9 +66,7 @@ class ReturnExchangeSchedulerTest {
 
         returnExchangeScheduler.completeApprovedReturnExchangeRequests();
 
-        assertThat(request.getStatus()).isEqualTo(AppConstants.ReturnExchangeStatus.COMPLETED);
-        assertThat(request.getRefundStatus()).isEqualTo(AppConstants.RefundStatus.NOT_REQUIRED);
-
+        verify(returnExchangeService).completeApprovedRequest(request, null);
         verify(returnExchangeRepo).saveAll(List.of(request));
     }
 
@@ -80,6 +79,7 @@ class ReturnExchangeSchedulerTest {
 
         returnExchangeScheduler.completeApprovedReturnExchangeRequests();
 
+        verify(returnExchangeService, never()).completeApprovedRequest(any(ReturnExchangeRequest.class), any());
         verify(returnExchangeRepo, never()).saveAll(anyList());
     }
 

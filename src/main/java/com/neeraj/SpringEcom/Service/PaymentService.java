@@ -11,6 +11,7 @@ import com.neeraj.SpringEcom.model.dto.PaymentVerifyRequest;
 import com.neeraj.SpringEcom.model.dto.PaymentVerifyResponse;
 import com.neeraj.SpringEcom.repo.OrderRepo;
 import com.razorpay.RazorpayClient;
+import com.razorpay.Refund;
 import com.razorpay.Utils;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Value;
@@ -125,10 +126,7 @@ public class PaymentService {
             attributes.put("razorpay_payment_id", request.razorpayPaymentId());
             attributes.put("razorpay_signature", request.razorpaySignature());
 
-            boolean validSignature = Utils.verifyPaymentSignature(
-                    attributes,
-                    razorpayKeySecret
-            );
+            boolean validSignature = Utils.verifyPaymentSignature(attributes, razorpayKeySecret);
 
             if (!validSignature) {
                 order.setPaymentStatus(AppConstants.PaymentStatus.FAILED);
@@ -153,6 +151,44 @@ public class PaymentService {
             throw e;
         } catch (Exception e) {
             throw new InvalidOrderException("Payment verification failed");
+        }
+    }
+
+    public RefundResult refundOnlinePayment(Order order, String refundReceipt) {
+        if (order == null) {
+            throw new InvalidOrderException("Order is required for refund");
+        }
+
+        if (!AppConstants.PaymentMode.ONLINE.equals(order.getPaymentMode())) {
+            throw new InvalidOrderException("Only online payments can be refunded through Razorpay");
+        }
+
+        if (!AppConstants.PaymentStatus.PAID.equals(order.getPaymentStatus())) {
+            throw new InvalidOrderException("Only paid orders can be refunded");
+        }
+
+        if (order.getGatewayPaymentId() == null || order.getGatewayPaymentId().isBlank()) {
+            throw new InvalidOrderException("Razorpay payment id is missing");
+        }
+
+        BigDecimal totalAmount = calculateOrderTotal(order);
+        long amountInPaise = totalAmount.multiply(BigDecimal.valueOf(100)).longValueExact();
+
+        try {
+            JSONObject options = new JSONObject();
+            options.put("amount", amountInPaise);
+            options.put("speed", "normal");
+            options.put("receipt", refundReceipt);
+
+            Refund refund = razorpayClient.payments.refund(order.getGatewayPaymentId(), options);
+
+            return new RefundResult(
+                    refund.get("id"),
+                    BigDecimal.valueOf(amountInPaise).divide(BigDecimal.valueOf(100)),
+                    LocalDateTime.now()
+            );
+        } catch (Exception e) {
+            throw new InvalidOrderException("Unable to process Razorpay refund");
         }
     }
 
@@ -193,5 +229,12 @@ public class PaymentService {
         }
 
         return auth.getName().toLowerCase().trim();
+    }
+
+    public record RefundResult(
+            String gatewayRefundId,
+            BigDecimal refundAmount,
+            LocalDateTime refundProcessedAt
+    ) {
     }
 }
