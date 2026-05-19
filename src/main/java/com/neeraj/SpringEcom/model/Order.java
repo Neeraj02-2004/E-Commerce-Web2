@@ -17,6 +17,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Entity
@@ -66,6 +67,18 @@ public class Order {
 
     @Column(nullable = false)
     private String userEmail;
+
+    @Column(nullable = false)
+    private String paymentStatus;
+
+    private String gatewayOrderId;
+
+    private String gatewayPaymentId;
+
+    @Column(length = 500)
+    private String gatewaySignature;
+
+    private LocalDateTime paidAt;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<OrderItem> orderItems;

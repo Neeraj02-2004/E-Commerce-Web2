@@ -23,17 +23,30 @@ public final class AppConstants {
 
     public static final class OrderStatus {
         public static final String PLACED = "PLACED";
-        public static final String CANCELLED = "CANCELLED";
+        public static final String SHIPPED = "SHIPPED";
         public static final String DELIVERED = "DELIVERED";
+        public static final String CANCELLED = "CANCELLED";
+        public static final String FAILED = "FAILED";
 
         private OrderStatus() {
         }
     }
 
+
     public static final class PaymentMode {
         public static final String CASH_ON_DELIVERY = "CASH_ON_DELIVERY";
+        public static final String ONLINE = "ONLINE";
 
         private PaymentMode() {
+        }
+    }
+
+    public static final class PaymentStatus {
+        public static final String PENDING = "PENDING";
+        public static final String PAID = "PAID";
+        public static final String FAILED = "FAILED";
+
+        private PaymentStatus() {
         }
     }
 }

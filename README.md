@@ -14,6 +14,7 @@ SpringEcom is a Spring Boot ecommerce backend API with JWT authentication, Googl
 - Swagger / OpenAPI
 - Maven Wrapper
 - Testcontainers
+- Razorpay Payment Gateway
 
 ## Requirements
 
@@ -44,6 +45,11 @@ GOOGLE_CLIENT_SECRET=change-me-google-client-secret
 JWT_SECRET=change-me-base64-256-bit-secret
 
 CORS_ORIGINS=http://localhost:5173
+
+RAZORPAY_KEY_ID=change-me-razorpay-key-id
+RAZORPAY_KEY_SECRET=change-me-razorpay-key-secret
+RAZORPAY_WEBHOOK_SECRET=change-me-razorpay-webhook-secret
+RAZORPAY_CURRENCY=INR
 ```
 
 Important: never commit the real `.env` file to GitHub.

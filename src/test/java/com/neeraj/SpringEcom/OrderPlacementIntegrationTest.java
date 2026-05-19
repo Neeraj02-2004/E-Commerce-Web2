@@ -74,6 +74,11 @@ class OrderPlacementIntegrationTest {
         registry.add("app.jwt.expiration-ms", () -> "3600000");
         registry.add("app.cors.origins", () -> "http://localhost:5173");
 
+        registry.add("razorpay.key-id", () -> "rzp_test_dummy_key");
+        registry.add("razorpay.key-secret", () -> "dummy_razorpay_secret");
+        registry.add("razorpay.webhook-secret", () -> "dummy_webhook_secret");
+        registry.add("razorpay.currency", () -> "INR");
+
         registry.add("spring.security.oauth2.client.registration.google.client-id", () -> "test-google-client-id");
         registry.add("spring.security.oauth2.client.registration.google.client-secret", () -> "test-google-client-secret");
     }
@@ -161,6 +166,7 @@ class OrderPlacementIntegrationTest {
                 .andExpect(jsonPath("$.mobileNo").value("9876543210"))
                 .andExpect(jsonPath("$.address").value("123 Main Road, Delhi, India"))
                 .andExpect(jsonPath("$.paymentMode").value("CASH_ON_DELIVERY"))
+                .andExpect(jsonPath("$.paymentStatus").value("PENDING"))
                 .andExpect(jsonPath("$.status").value("PLACED"))
                 .andExpect(jsonPath("$.items[0].productName").value("Test Phone"))
                 .andExpect(jsonPath("$.items[0].quantity").value(2));

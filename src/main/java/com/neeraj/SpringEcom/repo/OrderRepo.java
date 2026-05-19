@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -37,4 +38,12 @@ public interface OrderRepo extends JpaRepository<Order, Long> {
     @EntityGraph(attributePaths = {"orderItems", "orderItems.product"})
     @Query("select o from Order o where o.id in :ids")
     List<Order> findAllWithItemsByIdIn(@Param("ids") List<Long> ids);
+
+    Optional<Order> findByGatewayOrderId(String gatewayOrderId);
+
+
+    List<Order> findByStatus(String status);
+
+    List<Order> findByStatusAndOrderDateBefore(String status, LocalDate orderDate);
+
 }
