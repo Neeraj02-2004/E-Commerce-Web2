@@ -1,6 +1,6 @@
 # SpringEcom Backend
 
-SpringEcom is a Spring Boot ecommerce backend API with JWT authentication, Google login support, product management, order placement, wishlist, PostgreSQL database, Redis cache, Flyway migrations, Docker Compose, health checks, and Swagger API documentation.
+SpringEcom is a Spring Boot ecommerce backend API with JWT authentication, Google login support, product management, order placement, Razorpay online payment support, return/exchange request handling, wishlist, PostgreSQL database, Redis cache, Flyway migrations, Docker Compose, health checks, scheduled order automation, and Swagger API documentation.
 
 ## Tech Stack
 
@@ -56,6 +56,8 @@ Important: never commit the real `.env` file to GitHub.
 
 ## Run With Docker
 
+Start the full backend stack:
+
 ```powershell
 docker compose up --build
 ```
@@ -80,19 +82,35 @@ docker compose down -v
 
 ## Run Tests
 
+Run tests:
+
 ```powershell
 .\mvnw.cmd test
 ```
 
-If Docker Desktop is not running, the Testcontainers integration test is skipped automatically.
+Run full clean test:
+
+```powershell
+.\mvnw.cmd clean test
+```
+
+Latest verified result:
+
+```text
+57+ tests passing, 0 failures, 0 errors
+```
+
+If Docker Desktop is not running, the Testcontainers integration test may be skipped automatically depending on environment.
 
 ## Health Check
+
+Health endpoint:
 
 ```text
 http://localhost:8080/actuator/health
 ```
 
-Expected:
+Expected response:
 
 ```json
 {"status":"UP"}
@@ -126,6 +144,23 @@ Use the JWT token in protected requests:
 Authorization: Bearer <token>
 ```
 
+## User Roles
+
+Supported roles:
+
+- `USER`
+- `ADMIN`
+
+By default, registered users get the `USER` role.
+
+Make a user admin in Docker PostgreSQL:
+
+```powershell
+docker exec -it springecom-postgres psql -U springecom -d springecom -c "UPDATE users SET role = 'ADMIN' WHERE email = 'your-email@example.com';"
+```
+
+After changing role, log out and log in again to get a new JWT token.
+
 ## Product APIs
 
 Public endpoints:
@@ -152,7 +187,11 @@ Allowed image types:
 - PNG
 - WEBP
 
-Maximum product image size: 5MB.
+Maximum product image size:
+
+```text
+5MB
+```
 
 ## Order APIs
 
@@ -164,6 +203,138 @@ Protected endpoints:
 
 Order placement reduces product stock inside a transaction.
 
+Supported payment modes:
+
+- `CASH_ON_DELIVERY`
+- `ONLINE`
+
+Supported order statuses:
+
+- `PLACED`
+- `SHIPPED`
+- `DELIVERED`
+- `CANCELLED`
+- `FAILED`
+
+## Razorpay Payment APIs
+
+Protected endpoints:
+
+- `POST /api/payments/create`
+- `POST /api/payments/verify`
+
+Online payment flow:
+
+1. User places an order with payment mode `ONLINE`.
+2. Backend creates the order with payment status `PENDING`.
+3. Frontend calls `/api/payments/create`.
+4. Backend creates a Razorpay order.
+5. Frontend opens Razorpay Checkout.
+6. After successful payment, frontend calls `/api/payments/verify`.
+7. Backend verifies Razorpay signature.
+8. Backend updates payment status to `PAID`.
+
+Payment statuses:
+
+- `PENDING`
+- `PAID`
+- `FAILED`
+
+For client/live deployment, Razorpay KYC and payment method activation must be completed in the client's Razorpay business account.
+
+## Order Status Automation
+
+The backend includes automatic order status updates using Spring Scheduler.
+
+Rules:
+
+- `CASH_ON_DELIVERY` + 7 days old + `PLACED` = `DELIVERED`
+- `ONLINE` + 7 days old + `PAID` + `PLACED` = `DELIVERED`
+- `ONLINE` + 7 days old + `PENDING` = stays `PLACED`
+- `ONLINE` + payment `FAILED` = `FAILED`
+- `CANCELLED` orders are never changed by the scheduler
+
+When an order becomes `DELIVERED`, the backend stores `deliveredAt`.
+
+The order status scheduler runs daily at 1:00 AM.
+
+```java
+@Scheduled(cron = "0 0 1 * * *")
+```
+
+For local testing only, it can temporarily be changed to:
+
+```java
+@Scheduled(fixedRate = 60000)
+```
+
+This runs every 60 seconds.
+
+## Return / Exchange APIs
+
+Users can request return or exchange only after an order is delivered.
+
+User endpoints:
+
+- `POST /api/orders/{orderId}/return-exchange`
+- `GET /api/orders/return-exchange`
+
+Admin endpoints:
+
+- `GET /api/admin/return-exchange`
+- `PUT /api/admin/return-exchange/{requestId}/approve`
+- `PUT /api/admin/return-exchange/{requestId}/reject`
+- `PUT /api/admin/return-exchange/{requestId}/complete`
+
+Request types:
+
+- `RETURN`
+- `EXCHANGE`
+
+Request statuses:
+
+- `REQUESTED`
+- `APPROVED`
+- `REJECTED`
+- `COMPLETED`
+
+Refund statuses:
+
+- `NOT_REQUIRED`
+- `REFUND_PROCESSING`
+- `MANUAL_REFUND_REQUIRED`
+- `REFUNDED`
+
+Return/exchange rules:
+
+- Only `DELIVERED` orders are eligible.
+- Request window is 7 days after delivery.
+- User must provide a reason between 10 and 1000 characters.
+- A user cannot create multiple active return/exchange requests for the same order.
+- Admin can approve, reject, or complete a request.
+- For online paid returns, approval sets refund status to `REFUND_PROCESSING`.
+- For Cash on Delivery returns, approval sets refund status to `MANUAL_REFUND_REQUIRED`.
+- Completing an approved return sets refund status to `REFUNDED`.
+
+Automatic return/exchange completion:
+
+- Approved return/exchange requests are completed automatically after 6 days.
+- For approved returns, refund status becomes `REFUNDED`.
+- For approved exchanges, request status becomes `COMPLETED`.
+- The scheduler runs daily at 1:30 AM.
+
+```java
+@Scheduled(cron = "0 30 1 * * *")
+```
+
+Refund and exchange timing:
+
+```text
+After admin approval, return refunds and exchange requests are automatically completed after 6 days.
+```
+
+Important: this backend currently tracks refund status. Real automatic Razorpay refund API integration can be added later if required.
+
 ## Wishlist APIs
 
 Protected endpoints:
@@ -171,18 +342,6 @@ Protected endpoints:
 - `GET /api/wishlist`
 - `POST /api/wishlist/{productId}`
 - `DELETE /api/wishlist/{productId}`
-
-## Admin Role
-
-By default, registered users get the `USER` role.
-
-Make a user admin in Docker PostgreSQL:
-
-```powershell
-docker exec -it springecom-postgres psql -U springecom -d springecom -c "UPDATE users SET role = 'ADMIN' WHERE email = 'your-email@example.com';"
-```
-
-After changing role, log out and log in again to get a new JWT token.
 
 ## Database
 
@@ -196,6 +355,11 @@ Current migrations:
 
 - `V1__create_ecommerce_schema.sql`
 - `V2__allow_delivered_order_status.sql`
+- `V3__add_order_address_and_payment_mode.sql`
+- `V4__add_razorpay_payment_fields.sql`
+- `V5__allow_online_payment_mode.sql`
+- `V6__allow_failed_order_status.sql`
+- `V7__create_return_exchange_requests.sql`
 
 The app uses:
 
@@ -266,8 +430,12 @@ Before production delivery:
 - Do not commit `.env`.
 - Keep database and Redis ports private in production.
 - Configure real frontend URL in `CORS_ORIGINS`.
+- Complete Razorpay KYC and payment method activation in the client's Razorpay account.
+- Use live Razorpay keys only in production environment variables.
 - Back up PostgreSQL data regularly.
 - Store uploaded product images in persistent storage.
+- Keep schedulers on cron mode for production.
+- Confirm refund business rules with the client before enabling live automatic Razorpay refunds.
 
 ## Client Delivery Checklist
 
@@ -275,11 +443,17 @@ Before sending to the client, confirm:
 
 - `git status` is clean.
 - GitHub Actions is green.
-- `.\mvnw.cmd test` passes.
+- `.\mvnw.cmd clean test` passes.
 - Docker starts with `docker compose up --build`.
 - Health check returns `UP`.
 - Swagger opens successfully.
 - No real secrets are committed.
 - Admin login has been tested.
 - Product image upload has been tested.
+- Cash on Delivery order placement has been tested.
+- Online payment test flow has been tested.
+- Payment status updates to `PAID` after successful Razorpay verification.
 - Order placement and stock reduction have been tested.
+- Order status scheduler tests pass.
+- Return/exchange request flow has been tested.
+- Return/exchange scheduler tests pass.

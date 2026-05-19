@@ -32,7 +32,6 @@ public final class AppConstants {
         }
     }
 
-
     public static final class PaymentMode {
         public static final String CASH_ON_DELIVERY = "CASH_ON_DELIVERY";
         public static final String ONLINE = "ONLINE";
@@ -47,6 +46,34 @@ public final class AppConstants {
         public static final String FAILED = "FAILED";
 
         private PaymentStatus() {
+        }
+    }
+
+    public static final class ReturnExchangeType {
+        public static final String RETURN = "RETURN";
+        public static final String EXCHANGE = "EXCHANGE";
+
+        private ReturnExchangeType() {
+        }
+    }
+
+    public static final class ReturnExchangeStatus {
+        public static final String REQUESTED = "REQUESTED";
+        public static final String APPROVED = "APPROVED";
+        public static final String REJECTED = "REJECTED";
+        public static final String COMPLETED = "COMPLETED";
+
+        private ReturnExchangeStatus() {
+        }
+    }
+
+    public static final class RefundStatus {
+        public static final String NOT_REQUIRED = "NOT_REQUIRED";
+        public static final String REFUND_PROCESSING = "REFUND_PROCESSING";
+        public static final String MANUAL_REFUND_REQUIRED = "MANUAL_REFUND_REQUIRED";
+        public static final String REFUNDED = "REFUNDED";
+
+        private RefundStatus() {
         }
     }
 }

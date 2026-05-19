@@ -16,6 +16,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -48,6 +49,8 @@ class OrderStatusSchedulerTest {
         orderStatusScheduler.updateOrderStatuses();
 
         assertThat(codOrder.getStatus()).isEqualTo(AppConstants.OrderStatus.DELIVERED);
+        assertThat(codOrder.getDeliveredAt()).isNotNull();
+
         verify(orderRepo, atLeastOnce()).saveAll(anyList());
     }
 
@@ -71,6 +74,8 @@ class OrderStatusSchedulerTest {
         orderStatusScheduler.updateOrderStatuses();
 
         assertThat(onlinePaidOrder.getStatus()).isEqualTo(AppConstants.OrderStatus.DELIVERED);
+        assertThat(onlinePaidOrder.getDeliveredAt()).isNotNull();
+
         verify(orderRepo, atLeastOnce()).saveAll(anyList());
     }
 
@@ -94,7 +99,9 @@ class OrderStatusSchedulerTest {
         orderStatusScheduler.updateOrderStatuses();
 
         assertThat(onlinePendingOrder.getStatus()).isEqualTo(AppConstants.OrderStatus.PLACED);
-        verify(orderRepo, atLeastOnce()).saveAll(anyList());
+        assertThat(onlinePendingOrder.getDeliveredAt()).isNull();
+
+        verify(orderRepo, never()).saveAll(anyList());
     }
 
     @Test
@@ -117,6 +124,7 @@ class OrderStatusSchedulerTest {
         orderStatusScheduler.updateOrderStatuses();
 
         assertThat(onlineFailedOrder.getStatus()).isEqualTo(AppConstants.OrderStatus.FAILED);
+        assertThat(onlineFailedOrder.getDeliveredAt()).isNull();
 
         ArgumentCaptor<List<Order>> captor = ArgumentCaptor.forClass(List.class);
         verify(orderRepo, atLeastOnce()).saveAll(captor.capture());
@@ -147,7 +155,9 @@ class OrderStatusSchedulerTest {
         orderStatusScheduler.updateOrderStatuses();
 
         assertThat(cancelledOrder.getStatus()).isEqualTo(AppConstants.OrderStatus.CANCELLED);
-        verify(orderRepo, atLeastOnce()).saveAll(anyList());
+        assertThat(cancelledOrder.getDeliveredAt()).isNull();
+
+        verify(orderRepo, never()).saveAll(anyList());
     }
 
     private Order order(

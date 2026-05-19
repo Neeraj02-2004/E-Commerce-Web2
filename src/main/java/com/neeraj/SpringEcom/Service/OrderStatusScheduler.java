@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -34,6 +35,10 @@ public class OrderStatusScheduler {
                 .filter(order -> AppConstants.PaymentStatus.FAILED.equals(order.getPaymentStatus()))
                 .toList();
 
+        if (failedOrders.isEmpty()) {
+            return;
+        }
+
         for (Order order : failedOrders) {
             order.setStatus(AppConstants.OrderStatus.FAILED);
         }
@@ -53,8 +58,15 @@ public class OrderStatusScheduler {
                 .filter(this::canMarkDelivered)
                 .toList();
 
+        if (deliverableOrders.isEmpty()) {
+            return;
+        }
+
+        LocalDateTime deliveredTime = LocalDateTime.now();
+
         for (Order order : deliverableOrders) {
             order.setStatus(AppConstants.OrderStatus.DELIVERED);
+            order.setDeliveredAt(deliveredTime);
         }
 
         orderRepo.saveAll(deliverableOrders);

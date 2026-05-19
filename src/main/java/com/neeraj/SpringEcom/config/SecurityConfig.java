@@ -85,6 +85,10 @@ public class SecurityConfig {
                         .requestMatchers("/api/cancel/**").hasAnyRole("USER", "ADMIN")
                         .requestMatchers("/api/wishlist/**").hasAnyRole("USER", "ADMIN")
 
+                        .requestMatchers("/api/orders/*/return-exchange").hasAnyRole("USER", "ADMIN")
+                        .requestMatchers("/api/orders/return-exchange").hasAnyRole("USER", "ADMIN")
+                        .requestMatchers("/api/admin/return-exchange/**").hasRole("ADMIN")
+
                         .requestMatchers(HttpMethod.GET, "/api/products").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/products/search").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/product/**").permitAll()
