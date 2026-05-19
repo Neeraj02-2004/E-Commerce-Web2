@@ -1,6 +1,6 @@
 # SpringEcom Backend
 
-SpringEcom is a Spring Boot ecommerce backend API with JWT authentication, Google login support, product management, order placement, Razorpay online payment support, return/exchange request handling, wishlist, PostgreSQL database, Redis cache, Flyway migrations, Docker Compose, health checks, scheduled order automation, and Swagger API documentation.
+SpringEcom is a Spring Boot ecommerce backend API with JWT authentication, Google login support, product management, order placement, Razorpay online payment and refund support, return/exchange request handling, wishlist, PostgreSQL database, Redis cache, Flyway migrations, Docker Compose, health checks, scheduled order automation, and Swagger API documentation.
 
 ## Tech Stack
 
@@ -92,6 +92,12 @@ Run full clean test:
 
 ```powershell
 .\mvnw.cmd clean test
+```
+
+Run return/exchange refund tests:
+
+```powershell
+.\mvnw.cmd test "-Dtest=ReturnExchangeServiceTest,ReturnExchangeSchedulerTest"
 ```
 
 Latest verified result:
@@ -233,6 +239,7 @@ Online payment flow:
 6. After successful payment, frontend calls `/api/payments/verify`.
 7. Backend verifies Razorpay signature.
 8. Backend updates payment status to `PAID`.
+9. Backend stores Razorpay payment id and paid time.
 
 Payment statuses:
 
@@ -241,6 +248,37 @@ Payment statuses:
 - `FAILED`
 
 For client/live deployment, Razorpay KYC and payment method activation must be completed in the client's Razorpay business account.
+
+## Razorpay Refund Support
+
+The backend supports real Razorpay refunds for online paid return orders.
+
+Online return refund flow:
+
+1. User creates a return request for a delivered order.
+2. Admin approves the return request.
+3. Refund status becomes `REFUND_PROCESSING`.
+4. After 6 days, the return/exchange scheduler processes the approved return.
+5. Backend calls Razorpay refund API using the stored Razorpay payment id.
+6. If Razorpay refund succeeds:
+    - request status becomes `COMPLETED`
+    - refund status becomes `REFUNDED`
+    - gateway refund id is stored
+    - refund amount is stored
+    - refund processed time is stored
+7. If Razorpay refund fails:
+    - request status remains `APPROVED`
+    - refund status becomes `REFUND_FAILED`
+    - refund failure reason is stored
+    - scheduler can retry on the next run
+
+COD refund flow:
+
+- Cash on Delivery refunds cannot be processed through Razorpay.
+- COD return approval sets refund status to `MANUAL_REFUND_REQUIRED`.
+- Admin/business must process COD refunds manually.
+
+Important: online paid returns use Razorpay refund API when the approved return is completed. COD refunds are marked as `MANUAL_REFUND_REQUIRED` and must be handled manually by admin/business.
 
 ## Order Status Automation
 
@@ -304,6 +342,7 @@ Refund statuses:
 - `REFUND_PROCESSING`
 - `MANUAL_REFUND_REQUIRED`
 - `REFUNDED`
+- `REFUND_FAILED`
 
 Return/exchange rules:
 
@@ -314,12 +353,16 @@ Return/exchange rules:
 - Admin can approve, reject, or complete a request.
 - For online paid returns, approval sets refund status to `REFUND_PROCESSING`.
 - For Cash on Delivery returns, approval sets refund status to `MANUAL_REFUND_REQUIRED`.
-- Completing an approved return sets refund status to `REFUNDED`.
+- For online paid returns, completion calls Razorpay refund API.
+- For successful online refunds, refund status becomes `REFUNDED`.
+- For failed online refunds, refund status becomes `REFUND_FAILED`.
+- For approved exchanges, completion marks the request as `COMPLETED`.
 
 Automatic return/exchange completion:
 
 - Approved return/exchange requests are completed automatically after 6 days.
-- For approved returns, refund status becomes `REFUNDED`.
+- For approved online paid returns, backend attempts Razorpay refund.
+- For approved COD returns, backend marks the request completed and keeps manual refund responsibility with admin/business.
 - For approved exchanges, request status becomes `COMPLETED`.
 - The scheduler runs daily at 1:30 AM.
 
@@ -333,7 +376,26 @@ Refund and exchange timing:
 After admin approval, return refunds and exchange requests are automatically completed after 6 days.
 ```
 
-Important: this backend currently tracks refund status. Real automatic Razorpay refund API integration can be added later if required.
+## Return / Exchange Response Fields
+
+Return/exchange response includes:
+
+- `requestId`
+- `orderId`
+- `userEmail`
+- `requestType`
+- `reason`
+- `status`
+- `refundStatus`
+- `adminNote`
+- `gatewayRefundId`
+- `refundAmount`
+- `approvedAt`
+- `completedAt`
+- `refundProcessedAt`
+- `refundFailureReason`
+- `createdAt`
+- `updatedAt`
 
 ## Wishlist APIs
 
@@ -360,6 +422,7 @@ Current migrations:
 - `V5__allow_online_payment_mode.sql`
 - `V6__allow_failed_order_status.sql`
 - `V7__create_return_exchange_requests.sql`
+- `V8__add_razorpay_refund_fields.sql`
 
 The app uses:
 
@@ -432,10 +495,13 @@ Before production delivery:
 - Configure real frontend URL in `CORS_ORIGINS`.
 - Complete Razorpay KYC and payment method activation in the client's Razorpay account.
 - Use live Razorpay keys only in production environment variables.
+- Confirm Razorpay refund permission is enabled before live automatic refunds.
+- Ensure Razorpay account has enough balance or settlement support for refunds.
+- COD refunds must be handled manually by admin/business.
 - Back up PostgreSQL data regularly.
 - Store uploaded product images in persistent storage.
 - Keep schedulers on cron mode for production.
-- Confirm refund business rules with the client before enabling live automatic Razorpay refunds.
+- Confirm refund and exchange business rules with the client before enabling live operations.
 
 ## Client Delivery Checklist
 
@@ -457,3 +523,6 @@ Before sending to the client, confirm:
 - Order status scheduler tests pass.
 - Return/exchange request flow has been tested.
 - Return/exchange scheduler tests pass.
+- Online paid return refund flow has been tested with Razorpay test mode.
+- Refund failure behavior has been tested.
+- COD manual refund behavior has been confirmed.
