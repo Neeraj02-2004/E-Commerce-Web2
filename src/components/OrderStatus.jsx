@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
 import API from "../axios";
-import {
-  getMyReturnExchangeRequests,
-} from "../api/returnExchangeApi";
+import { getMyReturnExchangeRequests } from "../api/returnExchangeApi";
 import ReturnExchangePopup from "./ReturnExchangePopup";
 
 const OrderStatus = () => {
@@ -129,6 +127,28 @@ const OrderStatus = () => {
     return paymentMode || "Not available";
   };
 
+  const formatDateTime = (value) => {
+    if (!value) {
+      return null;
+    }
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return value;
+    }
+
+    return date.toLocaleString();
+  };
+
+  const formatAmount = (value) => {
+    if (value === null || value === undefined || value === "") {
+      return null;
+    }
+
+    return `Rs. ${Number(value).toFixed(2)}`;
+  };
+
   const getPaymentStatusColor = (paymentStatus) => {
     if (paymentStatus === "PAID") {
       return "green";
@@ -173,13 +193,165 @@ const OrderStatus = () => {
     return "orange";
   };
 
+  const getRefundStatusColor = (refundStatus) => {
+    if (refundStatus === "REFUNDED") {
+      return "green";
+    }
+
+    if (refundStatus === "REFUND_FAILED") {
+      return "red";
+    }
+
+    if (
+      refundStatus === "REFUND_PROCESSING" ||
+      refundStatus === "MANUAL_REFUND_REQUIRED"
+    ) {
+      return "orange";
+    }
+
+    return "#555";
+  };
+
+  const getRefundStatusMessage = (request) => {
+    if (!request) {
+      return "";
+    }
+
+    if (request.requestType === "EXCHANGE") {
+      if (request.status === "APPROVED") {
+        return "Exchange approved. New product delivery will complete after 6 days.";
+      }
+
+      if (request.status === "COMPLETED") {
+        return "Exchange completed successfully.";
+      }
+
+      return "";
+    }
+
+    if (request.refundStatus === "REFUND_PROCESSING") {
+      return "Refund is processing. It will be completed automatically after 6 days.";
+    }
+
+    if (request.refundStatus === "MANUAL_REFUND_REQUIRED") {
+      return "Manual refund is required for this Cash on Delivery order.";
+    }
+
+    if (request.refundStatus === "REFUNDED") {
+      return "Refund completed successfully.";
+    }
+
+    if (request.refundStatus === "REFUND_FAILED") {
+      return "Refund failed. Admin will retry or process it manually.";
+    }
+
+    return "";
+  };
+
+  const renderReturnExchangeDetails = (request) => {
+    const refundMessage = getRefundStatusMessage(request);
+    const approvedAt = formatDateTime(request.approvedAt);
+    const completedAt = formatDateTime(request.completedAt);
+    const refundProcessedAt = formatDateTime(request.refundProcessedAt);
+    const refundAmount = formatAmount(request.refundAmount);
+
+    return (
+      <div
+        style={{
+          padding: "12px",
+          background: "#f8f9fa",
+          borderRadius: "8px",
+          marginBottom: "10px",
+          border: "1px solid #e5e7eb",
+        }}
+      >
+        <p style={{ marginBottom: "5px" }}>
+          <strong>{request.requestType} Request:</strong>{" "}
+          <span
+            style={{
+              color: getReturnExchangeStatusColor(request.status),
+              fontWeight: "bold",
+            }}
+          >
+            {request.status}
+          </span>
+        </p>
+
+        {request.requestId && (
+          <p style={{ marginBottom: "5px" }}>
+            <strong>Request ID:</strong> {request.requestId}
+          </p>
+        )}
+
+        <p style={{ marginBottom: "5px" }}>
+          <strong>Refund Status:</strong>{" "}
+          <span
+            style={{
+              color: getRefundStatusColor(request.refundStatus),
+              fontWeight: "bold",
+            }}
+          >
+            {request.refundStatus || "NOT_REQUIRED"}
+          </span>
+        </p>
+
+        {refundMessage && (
+          <p style={{ marginBottom: "5px", color: "#555" }}>{refundMessage}</p>
+        )}
+
+        {refundAmount && (
+          <p style={{ marginBottom: "5px" }}>
+            <strong>Refund Amount:</strong> {refundAmount}
+          </p>
+        )}
+
+        {request.gatewayRefundId && (
+          <p style={{ marginBottom: "5px" }}>
+            <strong>Razorpay Refund ID:</strong> {request.gatewayRefundId}
+          </p>
+        )}
+
+        {approvedAt && (
+          <p style={{ marginBottom: "5px" }}>
+            <strong>Approved At:</strong> {approvedAt}
+          </p>
+        )}
+
+        {completedAt && (
+          <p style={{ marginBottom: "5px" }}>
+            <strong>Completed At:</strong> {completedAt}
+          </p>
+        )}
+
+        {refundProcessedAt && (
+          <p style={{ marginBottom: "5px" }}>
+            <strong>Refund Processed At:</strong> {refundProcessedAt}
+          </p>
+        )}
+
+        {request.refundFailureReason && (
+          <p style={{ marginBottom: "5px", color: "#dc3545" }}>
+            <strong>Refund Failure Reason:</strong>{" "}
+            {request.refundFailureReason}
+          </p>
+        )}
+
+        {request.adminNote && (
+          <p style={{ marginBottom: 0 }}>
+            <strong>Admin Note:</strong> {request.adminNote}
+          </p>
+        )}
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <>
         {popup.show && (
           <div style={popupStyle(popup.type)}>
             <div style={popupIconStyle}>
-              {popup.type === "success" ? "✓" : "!"}
+              {popup.type === "success" ? "OK" : "!"}
             </div>
             <div>{popup.message}</div>
           </div>
@@ -197,7 +369,7 @@ const OrderStatus = () => {
       {popup.show && (
         <div style={popupStyle(popup.type)}>
           <div style={popupIconStyle}>
-            {popup.type === "success" ? "✓" : "!"}
+            {popup.type === "success" ? "OK" : "!"}
           </div>
           <div>{popup.message}</div>
         </div>
@@ -284,45 +456,18 @@ const OrderStatus = () => {
                   </span>
                 </p>
 
-                {returnExchangeRequest && (
-                  <div
-                    style={{
-                      padding: "10px",
-                      background: "#f8f9fa",
-                      borderRadius: "8px",
-                      marginBottom: "10px",
-                    }}
-                  >
-                    <p style={{ marginBottom: "5px" }}>
-                      <strong>{returnExchangeRequest.requestType} Request:</strong>{" "}
-                      <span
-                        style={{
-                          color: getReturnExchangeStatusColor(
-                            returnExchangeRequest.status
-                          ),
-                          fontWeight: "bold",
-                        }}
-                      >
-                        {returnExchangeRequest.status}
-                      </span>
-                    </p>
-
-                    <p style={{ marginBottom: "5px" }}>
-                      <strong>Refund Status:</strong>{" "}
-                      {returnExchangeRequest.refundStatus}
-                    </p>
-
-                    {returnExchangeRequest.adminNote && (
-                      <p style={{ marginBottom: 0 }}>
-                        <strong>Admin Note:</strong>{" "}
-                        {returnExchangeRequest.adminNote}
-                      </p>
-                    )}
-                  </div>
+                {order.deliveredAt && (
+                  <p>
+                    <strong>Delivered At:</strong>{" "}
+                    {formatDateTime(order.deliveredAt)}
+                  </p>
                 )}
 
+                {returnExchangeRequest &&
+                  renderReturnExchangeDetails(returnExchangeRequest)}
+
                 <p>
-                  <strong>Total Price:</strong> ₹{manualTotal}
+                  <strong>Total Price:</strong> Rs. {manualTotal.toFixed(2)}
                 </p>
 
                 <div
@@ -383,7 +528,7 @@ const OrderStatus = () => {
                             <strong>{item.productName}</strong>
                           </p>
                           <p>Quantity: {item.quantity}</p>
-                          <p>Price: ₹{item.totalPrice}</p>
+                          <p>Price: Rs. {Number(item.totalPrice || 0).toFixed(2)}</p>
                           <hr />
                         </div>
                       ))
@@ -469,6 +614,7 @@ const popupIconStyle = {
   justifyContent: "center",
   fontWeight: "bold",
   flexShrink: 0,
+  fontSize: "12px",
 };
 
 export default OrderStatus;

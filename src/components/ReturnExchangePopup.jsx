@@ -50,6 +50,7 @@ const ReturnExchangePopup = ({
       });
 
       resetForm();
+
       onRequestSuccess(
         cleanType === "EXCHANGE"
           ? "Exchange request submitted successfully"
@@ -75,7 +76,7 @@ const ReturnExchangePopup = ({
 
       <Modal.Body>
         <p style={{ marginBottom: "8px" }}>
-          <strong>Order ID:</strong> {order?.orderId}
+          <strong>Order ID:</strong> {order?.orderId || "Not available"}
         </p>
 
         <p style={{ marginBottom: "12px", color: "#666" }}>
@@ -90,6 +91,7 @@ const ReturnExchangePopup = ({
           placeholder="Enter reason"
           value={reason}
           onChange={(e) => setReason(e.target.value)}
+          disabled={loading}
         />
 
         <div
@@ -119,8 +121,8 @@ const ReturnExchangePopup = ({
           }}
         >
           Requests are allowed within 7 days after delivery. After admin
-          approval, return/exchange completion happens automatically after 6
-          days.
+          approval, return refunds and exchange requests are automatically
+          completed after 6 days.
         </div>
       </Modal.Body>
 
