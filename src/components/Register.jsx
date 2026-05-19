@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { API_ORIGIN } from "../axios";
 
 function Register() {
   const [username, setUsername] = useState("");
@@ -34,7 +35,7 @@ function Register() {
     e.preventDefault();
 
     try {
-      const res = await fetch("${API_ORIGIN}/api/register", {
+      const res = await fetch(`${API_ORIGIN}/api/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, email, password }),
