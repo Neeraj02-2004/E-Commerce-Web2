@@ -66,33 +66,33 @@ public class SecurityConfig {
                 .authorizeHttpRequests(request -> request
 
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
-
-                        .requestMatchers(HttpMethod.POST, "/api/payments/webhook").permitAll()
-                        .requestMatchers("/api/payments/**").hasAnyRole("USER", "ADMIN")
 
                         .requestMatchers(HttpMethod.POST, "/api/register").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/login").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/login/google").permitAll()
 
-                        .requestMatchers(HttpMethod.POST, "/api/admin/product").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.PUT, "/api/admin/product/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.DELETE, "/api/admin/product/**").hasRole("ADMIN")
-
-                        .requestMatchers("/api/orders/**").hasAnyRole("USER", "ADMIN")
-                        .requestMatchers("/api/place", "/api/place/**").hasAnyRole("USER", "ADMIN")
-                        .requestMatchers("/api/cancel/**").hasAnyRole("USER", "ADMIN")
-                        .requestMatchers("/api/wishlist/**").hasAnyRole("USER", "ADMIN")
-
-                        .requestMatchers("/api/orders/*/return-exchange").hasAnyRole("USER", "ADMIN")
-                        .requestMatchers("/api/orders/return-exchange").hasAnyRole("USER", "ADMIN")
-                        .requestMatchers("/api/admin/return-exchange/**").hasRole("ADMIN")
-
                         .requestMatchers(HttpMethod.GET, "/api/products").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/products/search").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/product/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/product-images/**").permitAll()
+
+                        .requestMatchers(HttpMethod.POST, "/api/payments/webhook").permitAll()
+
+                        .requestMatchers(HttpMethod.POST, "/api/admin/product").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/admin/product/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/admin/product/**").hasRole("ADMIN")
+                        .requestMatchers("/api/admin/return-exchange/**").hasRole("ADMIN")
+
+                        .requestMatchers("/api/payments/**").hasRole("USER")
+                        .requestMatchers("/api/place", "/api/place/**").hasRole("USER")
+                        .requestMatchers("/api/cancel/**").hasRole("USER")
+                        .requestMatchers("/api/wishlist/**").hasRole("USER")
+                        .requestMatchers("/api/orders/*/return-exchange").hasRole("USER")
+                        .requestMatchers("/api/orders/return-exchange").hasRole("USER")
+                        .requestMatchers("/api/orders/**").hasRole("USER")
 
                         .anyRequest().authenticated()
                 )

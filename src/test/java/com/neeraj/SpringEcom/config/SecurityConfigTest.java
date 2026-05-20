@@ -116,6 +116,73 @@ class SecurityConfigTest {
     }
 
     @Test
+    void orderEndpoints_shouldRejectAdminRole() throws Exception {
+        mockMvc.perform(get("/api/orders")
+                        .with(user("admin@example.com").roles("ADMIN")))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/place")
+                        .with(user("admin@example.com").roles("ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "customerName": "Admin User",
+                                  "email": "admin@example.com",
+                                  "mobileNo": "9876543210",
+                                  "items": [
+                                    {
+                                      "productId": 1,
+                                      "quantity": 1
+                                    }
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(put("/api/cancel/ORD123")
+                        .with(user("admin@example.com").roles("ADMIN")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void wishlistEndpoints_shouldRequireAuthenticationAndRejectAdminRole() throws Exception {
+        mockMvc.perform(get("/api/wishlist"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(get("/api/wishlist")
+                        .with(user("admin@example.com").roles("ADMIN")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void paymentEndpoints_shouldRequireAuthenticationAndRejectAdminRole() throws Exception {
+        mockMvc.perform(post("/api/payments/create"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/payments/create")
+                        .with(user("admin@example.com").roles("ADMIN")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void userReturnExchangeEndpoints_shouldRejectAdminRole() throws Exception {
+        mockMvc.perform(post("/api/orders/ORD123/return-exchange")
+                        .with(user("admin@example.com").roles("ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "requestType": "RETURN",
+                                  "reason": "Product is defective and not working"
+                                }
+                                """))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/orders/return-exchange")
+                        .with(user("admin@example.com").roles("ADMIN")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void adminProductWriteEndpoints_shouldRequireAuthentication() throws Exception {
         mockMvc.perform(delete("/api/admin/product/1"))
                 .andExpect(status().isUnauthorized());
@@ -149,5 +216,22 @@ class SecurityConfigTest {
         mockMvc.perform(delete("/api/admin/product/1")
                         .with(user("admin@example.com").roles("ADMIN")))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void adminReturnExchangeEndpoints_shouldRejectUserRole() throws Exception {
+        mockMvc.perform(get("/api/admin/return-exchange")
+                        .with(user("buyer@example.com").roles("USER")))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(put("/api/admin/return-exchange/REX123/approve")
+                        .with(user("buyer@example.com").roles("USER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "adminNote": "Approved"
+                                }
+                                """))
+                .andExpect(status().isForbidden());
     }
 }
