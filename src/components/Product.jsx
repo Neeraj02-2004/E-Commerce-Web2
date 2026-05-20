@@ -28,6 +28,7 @@ const Product = () => {
   const token = localStorage.getItem("token");
   const isAdmin = localStorage.getItem("role") === "ADMIN";
   const isLoggedIn = Boolean(token);
+  const isCustomer = isLoggedIn && !isAdmin;
 
   const showPopup = (message, type = "success") => {
     setPopup({ show: true, message, type });
@@ -56,7 +57,7 @@ const Product = () => {
     };
 
     const checkWishlist = async () => {
-      if (!token) return;
+      if (!isCustomer) return;
 
       try {
         const response = await getWishlist();
@@ -71,7 +72,7 @@ const Product = () => {
 
     fetchProduct();
     checkWishlist();
-  }, [id, token]);
+  }, [id, isCustomer]);
 
   const openDeleteConfirm = () => {
     if (!token) {
@@ -127,6 +128,11 @@ const Product = () => {
   };
 
   const handleAddToCart = () => {
+    if (!isCustomer) {
+      showPopup("Admin cannot order products", "error");
+      return;
+    }
+
     if (!product.productAvailable) {
       showPopup("Product is out of stock", "error");
       return;
@@ -137,6 +143,11 @@ const Product = () => {
   };
 
   const handleWishlistClick = async () => {
+    if (!isCustomer) {
+      showPopup("Admin cannot use wishlist", "error");
+      return;
+    }
+
     if (!isLoggedIn) {
       showPopup("Please login to use wishlist", "error");
 
@@ -178,7 +189,7 @@ const Product = () => {
         {popup.show && (
           <div style={popupStyle(popup.type)}>
             <div style={popupIconStyle}>
-              {popup.type === "success" ? "✓" : "!"}
+              {popup.type === "success" ? "OK" : "!"}
             </div>
             <div>{popup.message}</div>
           </div>
@@ -196,7 +207,7 @@ const Product = () => {
       {popup.show && (
         <div style={popupStyle(popup.type)}>
           <div style={popupIconStyle}>
-            {popup.type === "success" ? "✓" : "!"}
+            {popup.type === "success" ? "OK" : "!"}
           </div>
           <div>{popup.message}</div>
         </div>
@@ -302,52 +313,69 @@ const Product = () => {
               {"₹" + product.price}
             </span>
 
-            <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-              <button
-                className={`cart-btn ${
-                  !product.productAvailable ? "disabled-btn" : ""
-                }`}
-                onClick={handleAddToCart}
-                disabled={!product.productAvailable}
-                style={{
-                  padding: "1rem 2rem",
-                  fontSize: "1rem",
-                  backgroundColor: "#007bff",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "5px",
-                  cursor: product.productAvailable ? "pointer" : "not-allowed",
-                  marginBottom: "1rem",
-                }}
-              >
-                {product.productAvailable ? "Add to cart" : "Out of Stock"}
-              </button>
+            {isCustomer && (
+              <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+                <button
+                  className={`cart-btn ${
+                    !product.productAvailable ? "disabled-btn" : ""
+                  }`}
+                  onClick={handleAddToCart}
+                  disabled={!product.productAvailable}
+                  style={{
+                    padding: "1rem 2rem",
+                    fontSize: "1rem",
+                    backgroundColor: "#007bff",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "5px",
+                    cursor: product.productAvailable ? "pointer" : "not-allowed",
+                    marginBottom: "1rem",
+                  }}
+                >
+                  {product.productAvailable ? "Add to cart" : "Out of Stock"}
+                </button>
 
-              <button
-                type="button"
-                onClick={handleWishlistClick}
-                disabled={wishlistLoading}
+                <button
+                  type="button"
+                  onClick={handleWishlistClick}
+                  disabled={wishlistLoading}
+                  style={{
+                    padding: "1rem 2rem",
+                    fontSize: "1rem",
+                    fontWeight: "600",
+                    backgroundColor: isWishlisted ? "#e91e63" : "#ffe4ef",
+                    color: isWishlisted ? "white" : "#c2185b",
+                    border: "1px solid #e91e63",
+                    borderRadius: "8px",
+                    cursor: wishlistLoading ? "not-allowed" : "pointer",
+                    marginBottom: "1rem",
+                    boxShadow: "0 4px 12px rgba(233, 30, 99, 0.25)",
+                    transition: "all 0.2s ease",
+                  }}
+                >
+                  {wishlistLoading
+                    ? "Please wait..."
+                    : isWishlisted
+                    ? "♥ Wishlisted"
+                    : "♡ Add to Wishlist"}
+                </button>
+              </div>
+            )}
+
+            {isAdmin && (
+              <div
                 style={{
-                  padding: "1rem 2rem",
-                  fontSize: "1rem",
-                  fontWeight: "600",
-                  backgroundColor: isWishlisted ? "#e91e63" : "#ffe4ef",
-                  color: isWishlisted ? "white" : "#c2185b",
-                  border: "1px solid #e91e63",
+                  padding: "12px",
+                  background: "#f8f9fa",
                   borderRadius: "8px",
-                  cursor: wishlistLoading ? "not-allowed" : "pointer",
-                  marginBottom: "1rem",
-                  boxShadow: "0 4px 12px rgba(233, 30, 99, 0.25)",
-                  transition: "all 0.2s ease",
+                  margin: "12px 0",
+                  color: "#555",
+                  border: "1px solid #e5e7eb",
                 }}
               >
-                {wishlistLoading
-                  ? "Please wait..."
-                  : isWishlisted
-                  ? "♥ Wishlisted"
-                  : "♡ Add to Wishlist"}
-              </button>
-            </div>
+                Admin mode: manage product details, stock, image, or availability.
+              </div>
+            )}
 
             <h6 style={{ marginBottom: "1rem" }}>
               Stock Available :{" "}
@@ -434,6 +462,7 @@ const popupIconStyle = {
   justifyContent: "center",
   fontWeight: "bold",
   flexShrink: 0,
+  fontSize: "12px",
 };
 
 const confirmOverlayStyle = {

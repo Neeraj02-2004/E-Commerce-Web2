@@ -509,39 +509,68 @@ padding-top: 100px;
 
 .delete-btn {
   width: 18px;
-  height: 17px;
-  background: url(&quot;delete-icn.svg&amp;quot;) no-repeat center;
-  /* color: var(--body_color); */
+  height: 18px;
+  border: none;
+  background: transparent;
+  position: relative;
+  cursor: pointer;
+}
+
+.delete-btn::before {
+  content: "×";
+  color: #dc3545;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 18px;
 }
 
 .like-btn {
   position: absolute;
   top: 9px;
   left: 15px;
-  background: url("twitter-heart.png");
   width: 60px;
   height: 60px;
-  background-size: 2900%;
-  background-repeat: no-repeat;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.like-btn::before {
+  content: "♡";
+  color: #e91e63;
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1;
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.like-btn.is-active::before,
+.is-active.like-btn::before {
+  content: "♥";
+  color: #e91e63;
+  transform: scale(1.1);
 }
 
 .is-active {
-  animation-name: animate;
-  animation-duration: 0.8s;
+  animation-name: heart-pop;
+  animation-duration: 0.25s;
   animation-iteration-count: 1;
-  animation-timing-function: steps(28);
+  animation-timing-function: ease-out;
   animation-fill-mode: forwards;
 }
 
-@keyframes animate {
+@keyframes heart-pop {
   0% {
-    background-position: left;
+    transform: scale(1);
   }
   50% {
-    background-position: right;
+    transform: scale(1.18);
   }
   100% {
-    background-position: right;
+    transform: scale(1);
   }
 }
 

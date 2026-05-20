@@ -11,6 +11,7 @@ import OrderStatus from "./components/OrderStatus";
 import Register from "./components/Register";
 import Login from "./components/Login";
 import Wishlist from "./components/Wishlist";
+import AdminReturnExchange from "./components/AdminReturnExchange";
 
 import "bootstrap/dist/css/bootstrap.min.css";
 import "bootstrap/dist/js/bootstrap.bundle.min.js";
@@ -118,6 +119,15 @@ function App() {
           element={
             <AdminRoute>
               <AddProduct />
+            </AdminRoute>
+          }
+        />
+
+        <Route
+          path="/admin/return-exchange"
+          element={
+            <AdminRoute>
+              <AdminReturnExchange />
             </AdminRoute>
           }
         />

@@ -31,6 +31,7 @@ const Navbar = ({ onSelectCategory, onLogout }) => {
 
   const isAdmin = localStorage.getItem("role") === "ADMIN";
   const isLoggedIn = Boolean(localStorage.getItem("token"));
+  const isCustomer = isLoggedIn && !isAdmin;
 
   const showPopup = (message, type = "success") => {
     setPopup({
@@ -153,7 +154,7 @@ const Navbar = ({ onSelectCategory, onLogout }) => {
       {popup.show && (
         <div style={popupStyle(popup.type)}>
           <div style={popupIconStyle}>
-            {popup.type === "success" ? "✓" : "!"}
+            {popup.type === "success" ? "OK" : "!"}
           </div>
           <div>{popup.message}</div>
         </div>
@@ -181,14 +182,22 @@ const Navbar = ({ onSelectCategory, onLogout }) => {
               </li>
 
               {isAdmin && (
-                <li className="nav-item">
-                  <a className="nav-link" href="/add_product">
-                    Add Product
-                  </a>
-                </li>
+                <>
+                  <li className="nav-item">
+                    <a className="nav-link" href="/add_product">
+                      Add Product
+                    </a>
+                  </li>
+
+                  <li className="nav-item">
+                    <a className="nav-link" href="/admin/return-exchange">
+                      Return Requests
+                    </a>
+                  </li>
+                </>
               )}
 
-              {isLoggedIn && (
+              {isCustomer && (
                 <li className="nav-item">
                   <a className="nav-link" href="/orders">
                     Orders
@@ -232,18 +241,18 @@ const Navbar = ({ onSelectCategory, onLogout }) => {
                 className="btn btn-sm btn-outline-dark"
                 onClick={toggleTheme}
               >
-                {theme === "dark-theme" ? "🌙" : "☀️"}
+                {theme === "dark-theme" ? "Dark" : "Light"}
               </button>
 
-              {isLoggedIn && (
+              {isCustomer && (
                 <a href="/wishlist" className="btn btn-sm btn-outline-danger">
-                  ♡ Wishlist
+                  Wishlist
                 </a>
               )}
 
-              {isLoggedIn && (
+              {isCustomer && (
                 <a href="/cart" className="btn btn-sm btn-outline-primary">
-                  🛒 Cart
+                  Cart
                 </a>
               )}
 
@@ -301,11 +310,21 @@ const Navbar = ({ onSelectCategory, onLogout }) => {
                       style={{
                         fontSize: "14px",
                         color: theme === "dark-theme" ? "#ccc" : "#666",
-                        marginBottom: "12px",
+                        marginBottom: "8px",
                         wordBreak: "break-word",
                       }}
                     >
                       {userInfo.email}
+                    </div>
+
+                    <div
+                      style={{
+                        fontSize: "13px",
+                        color: theme === "dark-theme" ? "#aaa" : "#777",
+                        marginBottom: "12px",
+                      }}
+                    >
+                      Role: {isAdmin ? "ADMIN" : "USER"}
                     </div>
 
                     <button
@@ -419,6 +438,7 @@ const popupIconStyle = {
   justifyContent: "center",
   fontWeight: "bold",
   flexShrink: 0,
+  fontSize: "12px",
 };
 
 export default Navbar;
