@@ -1,6 +1,6 @@
 # SpringEcom Backend
 
-SpringEcom is a Spring Boot ecommerce backend API with JWT authentication, Google login support, product management, order placement, Razorpay online payment and refund support, return/exchange request handling, wishlist, PostgreSQL database, Redis cache, Flyway migrations, Docker Compose, health checks, scheduled order automation, and Swagger API documentation.
+SpringEcom is a Spring Boot ecommerce backend API with JWT authentication, Google login support, role-based access control, product management, order placement, Razorpay online payment and refund support, return/exchange request handling, wishlist, PostgreSQL database, Redis cache, Flyway migrations, Docker Compose, health checks, scheduled order automation, and Swagger API documentation.
 
 ## Tech Stack
 
@@ -94,6 +94,12 @@ Run full clean test:
 .\mvnw.cmd clean test
 ```
 
+Run security tests:
+
+```powershell
+.\mvnw.cmd test "-Dtest=SecurityConfigTest"
+```
+
 Run return/exchange refund tests:
 
 ```powershell
@@ -159,6 +165,20 @@ Supported roles:
 
 By default, registered users get the `USER` role.
 
+Role responsibilities:
+
+| Role | Purpose |
+|---|---|
+| `USER` | Customer shopping, orders, wishlist, payments, return/exchange requests |
+| `ADMIN` | Product management and return/exchange administration |
+
+Important role rule:
+
+- `ADMIN` users are blocked from customer shopping APIs.
+- `ADMIN` users cannot place orders, pay for orders, use wishlist, cancel customer orders, or create user return/exchange requests.
+- `ADMIN` users can manage products and admin return/exchange decisions.
+- `USER` users cannot access admin product or admin return/exchange APIs.
+
 Make a user admin in Docker PostgreSQL:
 
 ```powershell
@@ -201,7 +221,7 @@ Maximum product image size:
 
 ## Order APIs
 
-Protected endpoints:
+User-only protected endpoints:
 
 - `POST /api/place`
 - `GET /api/orders`
@@ -224,10 +244,14 @@ Supported order statuses:
 
 ## Razorpay Payment APIs
 
-Protected endpoints:
+User-only protected endpoints:
 
 - `POST /api/payments/create`
 - `POST /api/payments/verify`
+
+Public endpoint:
+
+- `POST /api/payments/webhook`
 
 Online payment flow:
 
@@ -261,16 +285,16 @@ Online return refund flow:
 4. After 6 days, the return/exchange scheduler processes the approved return.
 5. Backend calls Razorpay refund API using the stored Razorpay payment id.
 6. If Razorpay refund succeeds:
-    - request status becomes `COMPLETED`
-    - refund status becomes `REFUNDED`
-    - gateway refund id is stored
-    - refund amount is stored
-    - refund processed time is stored
+   - request status becomes `COMPLETED`
+   - refund status becomes `REFUNDED`
+   - gateway refund id is stored
+   - refund amount is stored
+   - refund processed time is stored
 7. If Razorpay refund fails:
-    - request status remains `APPROVED`
-    - refund status becomes `REFUND_FAILED`
-    - refund failure reason is stored
-    - scheduler can retry on the next run
+   - request status remains `APPROVED`
+   - refund status becomes `REFUND_FAILED`
+   - refund failure reason is stored
+   - scheduler can retry on the next run
 
 COD refund flow:
 
@@ -312,12 +336,12 @@ This runs every 60 seconds.
 
 Users can request return or exchange only after an order is delivered.
 
-User endpoints:
+User-only endpoints:
 
 - `POST /api/orders/{orderId}/return-exchange`
 - `GET /api/orders/return-exchange`
 
-Admin endpoints:
+Admin-only endpoints:
 
 - `GET /api/admin/return-exchange`
 - `PUT /api/admin/return-exchange/{requestId}/approve`
@@ -399,11 +423,42 @@ Return/exchange response includes:
 
 ## Wishlist APIs
 
-Protected endpoints:
+User-only protected endpoints:
 
 - `GET /api/wishlist`
 - `POST /api/wishlist/{productId}`
 - `DELETE /api/wishlist/{productId}`
+
+## Security Rules Summary
+
+Public endpoints:
+
+- Register/login APIs
+- Product read APIs
+- Product image APIs
+- Health endpoint
+- Swagger/OpenAPI docs
+- Razorpay webhook
+
+User-only endpoints:
+
+- Order placement
+- User order listing
+- Order cancellation
+- Wishlist APIs
+- Razorpay payment create/verify APIs
+- User return/exchange request APIs
+
+Admin-only endpoints:
+
+- Product create/update/delete APIs
+- Admin return/exchange APIs
+
+Security test command:
+
+```powershell
+.\mvnw.cmd test "-Dtest=SecurityConfigTest"
+```
 
 ## Database
 
@@ -510,14 +565,21 @@ Before sending to the client, confirm:
 - `git status` is clean.
 - GitHub Actions is green.
 - `.\mvnw.cmd clean test` passes.
+- `.\mvnw.cmd test "-Dtest=SecurityConfigTest"` passes.
 - Docker starts with `docker compose up --build`.
 - Health check returns `UP`.
 - Swagger opens successfully.
 - No real secrets are committed.
 - Admin login has been tested.
+- User login has been tested.
 - Product image upload has been tested.
-- Cash on Delivery order placement has been tested.
-- Online payment test flow has been tested.
+- Cash on Delivery order placement has been tested with `USER` role.
+- Online payment test flow has been tested with `USER` role.
+- Admin cannot place orders through API.
+- Admin cannot use wishlist APIs.
+- Admin cannot use payment create/verify APIs.
+- User cannot access admin product APIs.
+- User cannot access admin return/exchange APIs.
 - Payment status updates to `PAID` after successful Razorpay verification.
 - Order placement and stock reduction have been tested.
 - Order status scheduler tests pass.
