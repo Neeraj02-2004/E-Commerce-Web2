@@ -20,10 +20,14 @@ function App() {
   const [selectedCategory, setSelectedCategory] = useState("");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
+  const getToken = () => localStorage.getItem("token");
+  const getRole = () => localStorage.getItem("role");
+  const isAdmin = () => getRole() === "ADMIN";
+  const isUser = () => getRole() === "USER";
+
   useEffect(() => {
     const checkLogin = () => {
-      const token = localStorage.getItem("token");
-      setIsLoggedIn(!!token);
+      setIsLoggedIn(Boolean(getToken()));
     };
 
     checkLogin();
@@ -45,23 +49,33 @@ function App() {
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("role");
+    localStorage.removeItem("username");
+    localStorage.removeItem("email");
     setIsLoggedIn(false);
   };
 
   const ProtectedRoute = ({ children }) => {
-    const token = localStorage.getItem("token");
-    return token ? children : <Navigate to="/login" replace />;
+    return getToken() ? children : <Navigate to="/login" replace />;
   };
 
-  const AdminRoute = ({ children }) => {
-    const token = localStorage.getItem("token");
-    const role = localStorage.getItem("role");
-
-    if (!token) {
+  const UserRoute = ({ children }) => {
+    if (!getToken()) {
       return <Navigate to="/login" replace />;
     }
 
-    if (role !== "ADMIN") {
+    if (!isUser()) {
+      return <Navigate to="/" replace />;
+    }
+
+    return children;
+  };
+
+  const AdminRoute = ({ children }) => {
+    if (!getToken()) {
+      return <Navigate to="/login" replace />;
+    }
+
+    if (!isAdmin()) {
       return <Navigate to="/" replace />;
     }
 
@@ -69,7 +83,12 @@ function App() {
   };
 
   return (
-    <BrowserRouter>
+    <BrowserRouter
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}
+    >
       {isLoggedIn && (
         <Navbar
           onSelectCategory={handleCategorySelect}
@@ -81,8 +100,8 @@ function App() {
         <Route
           path="/login"
           element={
-            localStorage.getItem("token") ? (
-              <Navigate to="/" />
+            getToken() ? (
+              <Navigate to="/" replace />
             ) : (
               <Login onLogin={handleLoginSuccess} />
             )
@@ -92,7 +111,7 @@ function App() {
         <Route
           path="/register"
           element={
-            localStorage.getItem("token") ? <Navigate to="/" /> : <Register />
+            getToken() ? <Navigate to="/" replace /> : <Register />
           }
         />
 
@@ -108,8 +127,35 @@ function App() {
         <Route
           path="/cart"
           element={
-            <ProtectedRoute>
+            <UserRoute>
               <Cart />
+            </UserRoute>
+          }
+        />
+
+        <Route
+          path="/wishlist"
+          element={
+            <UserRoute>
+              <Wishlist />
+            </UserRoute>
+          }
+        />
+
+        <Route
+          path="/orders"
+          element={
+            <UserRoute>
+              <OrderStatus />
+            </UserRoute>
+          }
+        />
+
+        <Route
+          path="/product/:id"
+          element={
+            <ProtectedRoute>
+              <Product />
             </ProtectedRoute>
           }
         />
@@ -124,33 +170,6 @@ function App() {
         />
 
         <Route
-          path="/admin/return-exchange"
-          element={
-            <AdminRoute>
-              <AdminReturnExchange />
-            </AdminRoute>
-          }
-        />
-
-        <Route
-          path="/wishlist"
-          element={
-            <ProtectedRoute>
-              <Wishlist />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/product/:id"
-          element={
-            <ProtectedRoute>
-              <Product />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
           path="/product/update/:id"
           element={
             <AdminRoute>
@@ -160,13 +179,15 @@ function App() {
         />
 
         <Route
-          path="/orders"
+          path="/admin/return-exchange"
           element={
-            <ProtectedRoute>
-              <OrderStatus />
-            </ProtectedRoute>
+            <AdminRoute>
+              <AdminReturnExchange />
+            </AdminRoute>
           }
         />
+
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );
