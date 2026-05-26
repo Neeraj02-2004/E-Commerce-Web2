@@ -61,7 +61,7 @@ public class ProductService {
         return productRepo.findAll();
     }
 
-    @Cacheable(value = "product", key = "#id", unless = "!#result.isPresent()")
+    @Cacheable(value = "product", key = "#id", unless = "#result == null")
     public Optional<Product> getProductById(Long id) {
         logger.info("Fetching product id: {}", id);
         return productRepo.findById(id);
