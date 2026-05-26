@@ -3,7 +3,7 @@ package com.neeraj.SpringEcom.model.dto;
 import java.math.BigDecimal;
 
 public record WishlistResponse(
-        int id,
+        Long id,
         String name,
         String brand,
         String description,

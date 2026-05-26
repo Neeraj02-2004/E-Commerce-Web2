@@ -14,14 +14,14 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface ProductRepo extends JpaRepository<Product, Integer> {
+public interface ProductRepo extends JpaRepository<Product, Long> {
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @QueryHints({
             @QueryHint(name = "jakarta.persistence.lock.timeout", value = "5000")
     })
     @Query("SELECT p FROM Product p WHERE p.id = :id")
-    Optional<Product> findByIdForUpdate(@Param("id") int id);
+    Optional<Product> findByIdForUpdate(@Param("id") Long id);
 
     @Query(
             value = """

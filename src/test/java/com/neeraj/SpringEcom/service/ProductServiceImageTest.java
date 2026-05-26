@@ -1,4 +1,4 @@
-package com.neeraj.SpringEcom.Service;
+package com.neeraj.SpringEcom.service;
 
 import com.neeraj.SpringEcom.exception.InvalidProductDataException;
 import com.neeraj.SpringEcom.model.Product;
@@ -33,12 +33,12 @@ class ProductServiceImageTest {
                 "imageFile",
                 "phone.png",
                 "image/png",
-                "fake-image-content".getBytes()
+                pngBytes()
         );
 
         when(productRepo.save(any(Product.class))).thenAnswer(invocation -> {
             Product saved = invocation.getArgument(0);
-            saved.setId(1);
+            saved.setId(1L);
             return saved;
         });
 
@@ -46,13 +46,33 @@ class ProductServiceImageTest {
 
         long storedFileCount = Files.list(tempDir).count();
 
-        assertThat(savedProduct.getId()).isEqualTo(1);
+        assertThat(savedProduct.getId()).isEqualTo(1L);
         assertThat(savedProduct.getImageName()).isEqualTo("phone.png");
         assertThat(savedProduct.getImageType()).isEqualTo("image/png");
         assertThat(savedProduct.getImageUrl()).startsWith("/api/product-images/");
         assertThat(storedFileCount).isEqualTo(1);
 
         verify(productRepo).save(product);
+    }
+
+    @Test
+    void addProduct_withSpoofedImageContentType_shouldThrowInvalidProductDataException() {
+        ProductService productService = new ProductService(productRepo, tempDir.toString());
+
+        Product product = validProduct();
+
+        MockMultipartFile spoofedImage = new MockMultipartFile(
+                "imageFile",
+                "phone.png",
+                "image/png",
+                "not-a-real-image".getBytes()
+        );
+
+        assertThatThrownBy(() -> productService.addProduct(product, spoofedImage))
+                .isInstanceOf(InvalidProductDataException.class)
+                .hasMessage("Product image must be JPG, PNG, or WEBP");
+
+        verify(productRepo, never()).save(any());
     }
 
     @Test
@@ -140,7 +160,7 @@ class ProductServiceImageTest {
                 "imageFile",
                 "../phone.png",
                 "image/png",
-                "fake-image-content".getBytes()
+                pngBytes()
         );
 
         assertThatThrownBy(() -> productService.addProduct(product, unsafeImage))
@@ -148,6 +168,14 @@ class ProductServiceImageTest {
                 .hasMessage("Invalid image filename");
 
         verify(productRepo, never()).save(any());
+    }
+
+    private byte[] pngBytes() {
+        return new byte[] {
+                (byte) 0x89, 0x50, 0x4E, 0x47,
+                0x0D, 0x0A, 0x1A, 0x0A,
+                0x00, 0x00, 0x00, 0x0D
+        };
     }
 
     private Product validProduct() {

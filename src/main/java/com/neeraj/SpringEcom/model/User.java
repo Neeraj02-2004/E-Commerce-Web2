@@ -1,7 +1,12 @@
 package com.neeraj.SpringEcom.model;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -27,8 +32,11 @@ public class User {
     private String password;
 
     @Column(nullable = false)
-    private String provider = AppConstants.Provider.LOCAL;
+    private String provider;
 
     @Column(nullable = false)
-    private String role = AppConstants.Role.USER;
+    private String role;
+
+    @Column(nullable = false)
+    private Integer tokenVersion;
 }

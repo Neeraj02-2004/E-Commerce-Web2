@@ -1,6 +1,6 @@
 package com.neeraj.SpringEcom.controller;
 
-import com.neeraj.SpringEcom.Service.WishlistService;
+import com.neeraj.SpringEcom.service.WishlistService;
 import com.neeraj.SpringEcom.model.dto.WishlistResponse;
 import jakarta.validation.constraints.Min;
 import org.springframework.http.HttpStatus;
@@ -29,7 +29,7 @@ public class WishlistController {
 
     @PostMapping("/{productId}")
     public ResponseEntity<WishlistResponse> addToWishlist(
-            @PathVariable @Min(value = 1, message = "Product id must be valid") int productId
+            @PathVariable @Min(value = 1, message = "Product id must be valid") Long productId
     ) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(wishlistService.addToWishlist(productId));
@@ -37,10 +37,9 @@ public class WishlistController {
 
     @DeleteMapping("/{productId}")
     public ResponseEntity<Map<String, String>> removeFromWishlist(
-            @PathVariable @Min(value = 1, message = "Product id must be valid") int productId
+            @PathVariable @Min(value = 1, message = "Product id must be valid") Long productId
     ) {
         wishlistService.removeFromWishlist(productId);
         return ResponseEntity.ok(Map.of("message", "Removed from wishlist"));
     }
 }
-

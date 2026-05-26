@@ -20,7 +20,10 @@ public record OrderRequest(
         String email,
 
         @NotBlank(message = "Mobile number is required")
-        @Pattern(regexp = "^[6-9]\\d{9}$", message = "Mobile number must be a valid 10 digit Indian number")
+        @Pattern(
+                regexp = "^(?:\\+91|91|0)?[6-9]\\d{9}$",
+                message = "Mobile number must be a valid Indian number"
+        )
         String mobileNo,
 
         @NotBlank(message = "Address is required")

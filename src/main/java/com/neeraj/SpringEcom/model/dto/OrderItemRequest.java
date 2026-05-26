@@ -7,7 +7,7 @@ public record OrderItemRequest(
 
         @NotNull(message = "Product id is required")
         @Min(value = 1, message = "Product id must be greater than zero")
-        Integer productId,
+        Long productId,
 
         @NotNull(message = "Quantity is required")
         @Min(value = 1, message = "Quantity must be at least 1")

@@ -1,7 +1,6 @@
 package com.neeraj.SpringEcom;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.neeraj.SpringEcom.Service.JwtService;
 import com.neeraj.SpringEcom.model.Product;
 import com.neeraj.SpringEcom.model.User;
 import com.neeraj.SpringEcom.model.dto.OrderItemRequest;
@@ -9,6 +8,7 @@ import com.neeraj.SpringEcom.model.dto.OrderRequest;
 import com.neeraj.SpringEcom.repo.OrderRepo;
 import com.neeraj.SpringEcom.repo.ProductRepo;
 import com.neeraj.SpringEcom.repo.UserRepo;
+import com.neeraj.SpringEcom.service.JwtService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -128,6 +128,7 @@ class OrderPlacementIntegrationTest {
         user.setPassword(passwordEncoder.encode("Password123"));
         user.setProvider("LOCAL");
         user.setRole("USER");
+        user.setTokenVersion(0);
         userRepo.save(user);
     }
 

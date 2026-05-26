@@ -1,5 +1,6 @@
 package com.neeraj.SpringEcom.repo;
 
+import com.neeraj.SpringEcom.model.AppConstants;
 import com.neeraj.SpringEcom.model.Order;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -21,17 +22,17 @@ public interface OrderRepo extends JpaRepository<Order, Long> {
             value = """
                     select o.id
                     from Order o
-                    where o.userEmail = :userEmail
+                    where o.user.id = :userId
                     order by o.orderDate desc, o.id desc
                     """,
             countQuery = """
                     select count(o)
                     from Order o
-                    where o.userEmail = :userEmail
+                    where o.user.id = :userId
                     """
     )
-    Page<Long> findOrderIdsByUserEmail(
-            @Param("userEmail") String userEmail,
+    Page<Long> findOrderIdsByUserId(
+            @Param("userId") Integer userId,
             Pageable pageable
     );
 
@@ -41,9 +42,12 @@ public interface OrderRepo extends JpaRepository<Order, Long> {
 
     Optional<Order> findByGatewayOrderId(String gatewayOrderId);
 
+    Optional<Order> findByGatewayPaymentId(String gatewayPaymentId);
 
-    List<Order> findByStatus(String status);
+    List<Order> findByStatus(AppConstants.OrderStatus status);
 
-    List<Order> findByStatusAndOrderDateBefore(String status, LocalDate orderDate);
-
+    List<Order> findByStatusAndOrderDateBefore(
+            AppConstants.OrderStatus status,
+            LocalDate orderDate
+    );
 }

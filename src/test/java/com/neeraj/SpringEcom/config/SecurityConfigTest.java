@@ -1,9 +1,9 @@
 package com.neeraj.SpringEcom.config;
 
-import com.neeraj.SpringEcom.Service.JwtService;
-import com.neeraj.SpringEcom.Service.MyUserDetailsService;
-import com.neeraj.SpringEcom.Service.OrderService;
-import com.neeraj.SpringEcom.Service.ProductService;
+import com.neeraj.SpringEcom.service.JwtService;
+import com.neeraj.SpringEcom.service.MyUserDetailsService;
+import com.neeraj.SpringEcom.service.OrderService;
+import com.neeraj.SpringEcom.service.ProductService;
 import com.neeraj.SpringEcom.controller.OrderController;
 import com.neeraj.SpringEcom.controller.ProductController;
 import org.junit.jupiter.api.Test;
@@ -18,7 +18,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 
-import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -35,7 +35,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 })
 @Import({
         SecurityConfig.class,
-        JwtFilter.class
+        JwtFilter.class,
+        RateLimitFilter.class
 })
 @TestPropertySource(properties = {
         "app.cors.origins=http://localhost:5173"
@@ -211,7 +212,7 @@ class SecurityConfigTest {
 
     @Test
     void adminProductWriteEndpoints_shouldAllowAdminRole() throws Exception {
-        doNothing().when(productService).deleteProduct(anyInt());
+        doNothing().when(productService).deleteProduct(anyLong());
 
         mockMvc.perform(delete("/api/admin/product/1")
                         .with(user("admin@example.com").roles("ADMIN")))

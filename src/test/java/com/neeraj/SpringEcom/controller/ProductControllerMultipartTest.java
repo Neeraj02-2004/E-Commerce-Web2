@@ -1,10 +1,9 @@
-package com.neeraj.SpringEcom.Controller;
+package com.neeraj.SpringEcom.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.neeraj.SpringEcom.Service.JwtService;
-import com.neeraj.SpringEcom.Service.MyUserDetailsService;
-import com.neeraj.SpringEcom.Service.ProductService;
-import com.neeraj.SpringEcom.controller.ProductController;
+import com.neeraj.SpringEcom.service.JwtService;
+import com.neeraj.SpringEcom.service.MyUserDetailsService;
+import com.neeraj.SpringEcom.service.ProductService;
 import com.neeraj.SpringEcom.exception.GlobalExceptionHandler;
 import com.neeraj.SpringEcom.exception.InvalidProductDataException;
 import com.neeraj.SpringEcom.model.Product;
@@ -19,6 +18,7 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
@@ -50,7 +50,7 @@ class ProductControllerMultipartTest {
     @Test
     void addProduct_withValidProductAndImage_shouldReturnCreatedProduct() throws Exception {
         Product savedProduct = product();
-        savedProduct.setId(1);
+        savedProduct.setId(1L);
         savedProduct.setImageName("phone.png");
         savedProduct.setImageType("image/png");
         savedProduct.setImageUrl("/api/product-images/generated-phone.png");
@@ -94,6 +94,7 @@ class ProductControllerMultipartTest {
                 "short",
                 BigDecimal.ZERO,
                 "",
+                LocalDate.of(2026, 5, 24),
                 true,
                 -1
         );
@@ -128,8 +129,16 @@ class ProductControllerMultipartTest {
                 "imageFile",
                 "phone.png",
                 "image/png",
-                "fake-image-content".getBytes()
+                pngBytes()
         );
+    }
+
+    private byte[] pngBytes() {
+        return new byte[] {
+                (byte) 0x89, 0x50, 0x4E, 0x47,
+                0x0D, 0x0A, 0x1A, 0x0A,
+                0x00, 0x00, 0x00, 0x0D
+        };
     }
 
     private ProductRequest validProductRequest() {
@@ -139,6 +148,7 @@ class ProductControllerMultipartTest {
                 "A reliable Android smartphone",
                 BigDecimal.valueOf(24999),
                 "Mobiles",
+                LocalDate.of(2026, 5, 24),
                 true,
                 10
         );
@@ -151,6 +161,7 @@ class ProductControllerMultipartTest {
         product.setDescription("A reliable Android smartphone");
         product.setPrice(BigDecimal.valueOf(24999));
         product.setCategory("Mobiles");
+        product.setReleaseDate(LocalDate.of(2026, 5, 24));
         product.setProductAvailable(true);
         product.setStockQuantity(10);
         return product;

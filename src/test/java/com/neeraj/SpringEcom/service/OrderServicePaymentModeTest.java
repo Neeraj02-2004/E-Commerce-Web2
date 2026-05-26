@@ -1,18 +1,20 @@
-package com.neeraj.SpringEcom.Service;
+package com.neeraj.SpringEcom.service;
 
 import com.neeraj.SpringEcom.exception.InvalidOrderException;
 import com.neeraj.SpringEcom.model.AppConstants;
 import com.neeraj.SpringEcom.model.Order;
 import com.neeraj.SpringEcom.model.Product;
+import com.neeraj.SpringEcom.model.User;
 import com.neeraj.SpringEcom.model.dto.OrderItemRequest;
 import com.neeraj.SpringEcom.model.dto.OrderRequest;
 import com.neeraj.SpringEcom.model.dto.OrderResponse;
 import com.neeraj.SpringEcom.repo.OrderRepo;
 import com.neeraj.SpringEcom.repo.ProductRepo;
-import org.junit.jupiter.api.AfterEach;
+import com.neeraj.SpringEcom.repo.UserRepo;
+import com.neeraj.SpringEcom.security.CurrentUserProvider;
+import com.neeraj.SpringEcom.security.OrderOwnershipValidator;
 import org.junit.jupiter.api.Test;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.cache.CacheManager;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -23,32 +25,40 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import com.neeraj.SpringEcom.util.EmailNormalizer;
+
 
 class OrderServicePaymentModeTest {
 
-    @AfterEach
-    void tearDown() {
-        SecurityContextHolder.clearContext();
-    }
+    private static final EmailNormalizer EMAIL_NORMALIZER = new EmailNormalizer();
 
     @Test
     void placeOrder_withCashOnDelivery_shouldSetPendingPaymentStatus() {
         ProductRepo productRepo = mock(ProductRepo.class);
         OrderRepo orderRepo = mock(OrderRepo.class);
+        UserRepo userRepo = userRepo();
+        CurrentUserProvider currentUserProvider = currentUserProvider();
+        OrderOwnershipValidator orderOwnershipValidator = new OrderOwnershipValidator(EMAIL_NORMALIZER);
+        CacheManager cacheManager = mock(CacheManager.class);
 
-        Product product = product(1, "Phone", 5);
+        Product product = product(1L, "Phone", 5);
 
-        when(productRepo.findByIdForUpdate(1)).thenReturn(Optional.of(product));
-        when(productRepo.saveAll(any())).thenReturn(List.of(product));
+        when(productRepo.findByIdForUpdate(1L)).thenReturn(Optional.of(product));
         when(orderRepo.save(any(Order.class))).thenAnswer(invocation -> {
             Order order = invocation.getArgument(0);
             order.setId(1L);
             return order;
         });
 
-        authenticate("buyer@example.com");
-
-        OrderService orderService = new OrderService(productRepo, orderRepo);
+        OrderService orderService = new OrderService(
+                productRepo,
+                orderRepo,
+                userRepo,
+                currentUserProvider,
+                orderOwnershipValidator,
+                cacheManager,
+                EMAIL_NORMALIZER
+        );
 
         OrderResponse response = orderService.placeOrder(orderRequest("CASH_ON_DELIVERY"));
 
@@ -62,20 +72,29 @@ class OrderServicePaymentModeTest {
     void placeOrder_withCodAlias_shouldAcceptCashOnDelivery() {
         ProductRepo productRepo = mock(ProductRepo.class);
         OrderRepo orderRepo = mock(OrderRepo.class);
+        UserRepo userRepo = userRepo();
+        CurrentUserProvider currentUserProvider = currentUserProvider();
+        OrderOwnershipValidator orderOwnershipValidator = new OrderOwnershipValidator(EMAIL_NORMALIZER);
+        CacheManager cacheManager = mock(CacheManager.class);
 
-        Product product = product(1, "Phone", 5);
+        Product product = product(1L, "Phone", 5);
 
-        when(productRepo.findByIdForUpdate(1)).thenReturn(Optional.of(product));
-        when(productRepo.saveAll(any())).thenReturn(List.of(product));
+        when(productRepo.findByIdForUpdate(1L)).thenReturn(Optional.of(product));
         when(orderRepo.save(any(Order.class))).thenAnswer(invocation -> {
             Order order = invocation.getArgument(0);
             order.setId(1L);
             return order;
         });
 
-        authenticate("buyer@example.com");
-
-        OrderService orderService = new OrderService(productRepo, orderRepo);
+        OrderService orderService = new OrderService(
+                productRepo,
+                orderRepo,
+                userRepo,
+                currentUserProvider,
+                orderOwnershipValidator,
+                cacheManager,
+                EMAIL_NORMALIZER
+        );
 
         OrderResponse response = orderService.placeOrder(orderRequest("COD"));
 
@@ -87,20 +106,29 @@ class OrderServicePaymentModeTest {
     void placeOrder_withOnlinePayment_shouldSetOnlineAndPending() {
         ProductRepo productRepo = mock(ProductRepo.class);
         OrderRepo orderRepo = mock(OrderRepo.class);
+        UserRepo userRepo = userRepo();
+        CurrentUserProvider currentUserProvider = currentUserProvider();
+        OrderOwnershipValidator orderOwnershipValidator = new OrderOwnershipValidator(EMAIL_NORMALIZER);
+        CacheManager cacheManager = mock(CacheManager.class);
 
-        Product product = product(1, "Phone", 5);
+        Product product = product(1L, "Phone", 5);
 
-        when(productRepo.findByIdForUpdate(1)).thenReturn(Optional.of(product));
-        when(productRepo.saveAll(any())).thenReturn(List.of(product));
+        when(productRepo.findByIdForUpdate(1L)).thenReturn(Optional.of(product));
         when(orderRepo.save(any(Order.class))).thenAnswer(invocation -> {
             Order order = invocation.getArgument(0);
             order.setId(1L);
             return order;
         });
 
-        authenticate("buyer@example.com");
-
-        OrderService orderService = new OrderService(productRepo, orderRepo);
+        OrderService orderService = new OrderService(
+                productRepo,
+                orderRepo,
+                userRepo,
+                currentUserProvider,
+                orderOwnershipValidator,
+                cacheManager,
+                EMAIL_NORMALIZER
+        );
 
         OrderResponse response = orderService.placeOrder(orderRequest("ONLINE"));
 
@@ -112,20 +140,48 @@ class OrderServicePaymentModeTest {
     void placeOrder_withInvalidPaymentMode_shouldThrow() {
         ProductRepo productRepo = mock(ProductRepo.class);
         OrderRepo orderRepo = mock(OrderRepo.class);
+        UserRepo userRepo = userRepo();
+        CurrentUserProvider currentUserProvider = currentUserProvider();
+        OrderOwnershipValidator orderOwnershipValidator = new OrderOwnershipValidator(EMAIL_NORMALIZER);
+        CacheManager cacheManager = mock(CacheManager.class);
 
-        authenticate("buyer@example.com");
-
-        OrderService orderService = new OrderService(productRepo, orderRepo);
+        OrderService orderService = new OrderService(
+                productRepo,
+                orderRepo,
+                userRepo,
+                currentUserProvider,
+                orderOwnershipValidator,
+                cacheManager,
+                EMAIL_NORMALIZER
+        );
 
         assertThatThrownBy(() -> orderService.placeOrder(orderRequest("CARD")))
                 .isInstanceOf(InvalidOrderException.class)
                 .hasMessageContaining("Invalid payment mode");
     }
 
-    private static void authenticate(String email) {
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(email, null, List.of())
-        );
+    private static UserRepo userRepo() {
+        UserRepo userRepo = mock(UserRepo.class);
+        when(userRepo.findByEmail("buyer@example.com")).thenReturn(Optional.of(user()));
+        return userRepo;
+    }
+
+    private static User user() {
+        User user = new User();
+        user.setId(1);
+        user.setUsername("Neeraj");
+        user.setEmail("buyer@example.com");
+        user.setPassword("password");
+        user.setProvider("LOCAL");
+        user.setRole("USER");
+        user.setTokenVersion(0);
+        return user;
+    }
+
+    private static CurrentUserProvider currentUserProvider() {
+        CurrentUserProvider currentUserProvider = mock(CurrentUserProvider.class);
+        when(currentUserProvider.getAuthenticatedEmail()).thenReturn("buyer@example.com");
+        return currentUserProvider;
     }
 
     private static OrderRequest orderRequest(String paymentMode) {
@@ -135,11 +191,11 @@ class OrderServicePaymentModeTest {
                 "9876543210",
                 "123 Main Road, Delhi, India",
                 paymentMode,
-                List.of(new OrderItemRequest(1, 1))
+                List.of(new OrderItemRequest(1L, 1))
         );
     }
 
-    private static Product product(int id, String name, int stock) {
+    private static Product product(Long id, String name, int stock) {
         Product product = new Product();
         product.setId(id);
         product.setName(name);

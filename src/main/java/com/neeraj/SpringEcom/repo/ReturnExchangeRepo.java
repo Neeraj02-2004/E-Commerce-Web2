@@ -11,6 +11,8 @@ public interface ReturnExchangeRepo extends JpaRepository<ReturnExchangeRequest,
 
     Optional<ReturnExchangeRequest> findByRequestId(String requestId);
 
+    Optional<ReturnExchangeRequest> findByGatewayRefundId(String gatewayRefundId);
+
     List<ReturnExchangeRequest> findByUserEmailOrderByCreatedAtDesc(String userEmail);
 
     List<ReturnExchangeRequest> findByStatusOrderByCreatedAtDesc(String status);

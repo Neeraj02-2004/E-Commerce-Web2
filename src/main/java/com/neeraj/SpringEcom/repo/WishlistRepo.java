@@ -8,11 +8,9 @@ import java.util.Optional;
 
 public interface WishlistRepo extends JpaRepository<WishlistItem, Long> {
 
-    List<WishlistItem> findByUserEmail(String userEmail);
+    List<WishlistItem> findByUserId(Integer userId);
 
-    Optional<WishlistItem> findByUserEmailAndProductId(String userEmail, int productId);
+    Optional<WishlistItem> findByUserIdAndProductId(Integer userId, Long productId);
 
-    boolean existsByUserEmailAndProductId(String userEmail, int productId);
-
-    void deleteByUserEmailAndProductId(String userEmail, int productId);
+    void deleteByUserIdAndProductId(Integer userId, Long productId);
 }

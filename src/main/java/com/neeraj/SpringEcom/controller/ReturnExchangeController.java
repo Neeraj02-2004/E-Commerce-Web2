@@ -1,6 +1,6 @@
 package com.neeraj.SpringEcom.controller;
 
-import com.neeraj.SpringEcom.Service.ReturnExchangeService;
+import com.neeraj.SpringEcom.service.ReturnExchangeService;
 import com.neeraj.SpringEcom.model.dto.ReturnExchangeCreateRequest;
 import com.neeraj.SpringEcom.model.dto.ReturnExchangeDecisionRequest;
 import com.neeraj.SpringEcom.model.dto.ReturnExchangeResponse;

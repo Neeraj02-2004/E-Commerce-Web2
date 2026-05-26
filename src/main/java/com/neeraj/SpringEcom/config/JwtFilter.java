@@ -1,38 +1,35 @@
 package com.neeraj.SpringEcom.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.neeraj.SpringEcom.Service.JwtService;
-import com.neeraj.SpringEcom.Service.MyUserDetailsService;
+import com.neeraj.SpringEcom.service.JwtService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
-import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 
 @Component
 public class JwtFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
-    private final MyUserDetailsService userDetailsService;
     private final ObjectMapper objectMapper;
 
     public JwtFilter(
             JwtService jwtService,
-            MyUserDetailsService userDetailsService,
             ObjectMapper objectMapper
     ) {
         this.jwtService = jwtService;
-        this.userDetailsService = userDetailsService;
         this.objectMapper = objectMapper;
     }
 
@@ -54,22 +51,22 @@ public class JwtFilter extends OncePerRequestFilter {
 
         try {
             String username = jwtService.extractUserName(token);
+            String role = jwtService.extractRole(token);
 
-            if (username != null &&
-                    SecurityContextHolder.getContext().getAuthentication() == null) {
+            if (username != null
+                    && role != null
+                    && SecurityContextHolder.getContext().getAuthentication() == null) {
 
-                UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-
-                if (!jwtService.validateToken(token, userDetails)) {
+                if (!jwtService.validateToken(token)) {
                     writeUnauthorizedResponse(response, "Invalid or expired token");
                     return;
                 }
 
                 UsernamePasswordAuthenticationToken auth =
                         new UsernamePasswordAuthenticationToken(
-                                userDetails,
+                                username,
                                 null,
-                                userDetails.getAuthorities()
+                                List.of(new SimpleGrantedAuthority(normalizeRole(role)))
                         );
 
                 auth.setDetails(
@@ -85,6 +82,16 @@ public class JwtFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private String normalizeRole(String role) {
+        String cleanRole = role.trim().toUpperCase();
+
+        if (cleanRole.startsWith("ROLE_")) {
+            return cleanRole;
+        }
+
+        return "ROLE_" + cleanRole;
     }
 
     private void writeUnauthorizedResponse(
@@ -107,4 +114,3 @@ public class JwtFilter extends OncePerRequestFilter {
         );
     }
 }
-

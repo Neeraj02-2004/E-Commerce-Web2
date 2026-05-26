@@ -1,18 +1,20 @@
-package com.neeraj.SpringEcom.Service;
+package com.neeraj.SpringEcom.service;
 
 import com.neeraj.SpringEcom.exception.OrderAlreadyCancelledException;
+import com.neeraj.SpringEcom.model.AppConstants;
 import com.neeraj.SpringEcom.model.Order;
 import com.neeraj.SpringEcom.model.OrderItem;
 import com.neeraj.SpringEcom.model.Product;
 import com.neeraj.SpringEcom.model.dto.OrderResponse;
 import com.neeraj.SpringEcom.repo.OrderRepo;
 import com.neeraj.SpringEcom.repo.ProductRepo;
-import org.junit.jupiter.api.AfterEach;
+import com.neeraj.SpringEcom.repo.UserRepo;
+import com.neeraj.SpringEcom.security.CurrentUserProvider;
+import com.neeraj.SpringEcom.security.OrderOwnershipValidator;
 import org.junit.jupiter.api.Test;
+import org.springframework.cache.CacheManager;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
-
+import com.neeraj.SpringEcom.util.EmailNormalizer;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -21,49 +23,57 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
+
 
 class OrderServiceCancelOrderTest {
 
     private final ProductRepo productRepo = mock(ProductRepo.class);
     private final OrderRepo orderRepo = mock(OrderRepo.class);
-    private final OrderService orderService = new OrderService(productRepo, orderRepo);
+    private final UserRepo userRepo = mock(UserRepo.class);
+    private final CurrentUserProvider currentUserProvider = mock(CurrentUserProvider.class);
+    private final EmailNormalizer emailNormalizer = new EmailNormalizer();
+    private final OrderOwnershipValidator orderOwnershipValidator = new OrderOwnershipValidator(emailNormalizer);
+    private final CacheManager cacheManager = mock(CacheManager.class);
 
-    @AfterEach
-    void tearDown() {
-        SecurityContextHolder.clearContext();
-    }
+    private final OrderService orderService = new OrderService(
+            productRepo,
+            orderRepo,
+            userRepo,
+            currentUserProvider,
+            orderOwnershipValidator,
+            cacheManager,
+            emailNormalizer
+    );
 
     @Test
     void cancelOrder_whenOwnerCancelsPlacedOrder_shouldRestoreStockAndReturnCancelledOrder() {
-        authenticateAs("buyer@example.com");
+        when(currentUserProvider.getAuthenticatedEmail()).thenReturn("buyer@example.com");
 
-        Product product = product(1, "Keyboard", 3);
-        Order order = order("ORD123", "buyer@example.com", "PLACED", product, 2);
+        Product product = product(1L, "Keyboard", 3);
+        Order order = order("ORD123", "buyer@example.com", AppConstants.OrderStatus.PLACED, product, 2);
 
         when(orderRepo.findByOrderId("ORD123")).thenReturn(Optional.of(order));
-        when(productRepo.findByIdForUpdate(1)).thenReturn(Optional.of(product));
-        when(productRepo.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(productRepo.findByIdForUpdate(1L)).thenReturn(Optional.of(product));
         when(orderRepo.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         OrderResponse response = orderService.cancelOrder("ORD123");
 
         assertThat(response.orderId()).isEqualTo("ORD123");
-        assertThat(response.status()).isEqualTo("CANCELLED");
+        assertThat(response.status()).isEqualTo(AppConstants.OrderStatus.CANCELLED);
         assertThat(product.getStockQuantity()).isEqualTo(5);
-        assertThat(order.getStatus()).isEqualTo("CANCELLED");
+        assertThat(order.getStatus()).isEqualTo(AppConstants.OrderStatus.CANCELLED);
 
-        verify(productRepo).saveAll(List.of(product));
         verify(orderRepo).save(order);
     }
 
     @Test
     void cancelOrder_whenDifferentUser_shouldThrowAccessDeniedAndNotRestoreStock() {
-        authenticateAs("other@example.com");
+        when(currentUserProvider.getAuthenticatedEmail()).thenReturn("other@example.com");
 
-        Product product = product(1, "Keyboard", 3);
-        Order order = order("ORD123", "buyer@example.com", "PLACED", product, 2);
+        Product product = product(1L, "Keyboard", 3);
+        Order order = order("ORD123", "buyer@example.com", AppConstants.OrderStatus.PLACED, product, 2);
 
         when(orderRepo.findByOrderId("ORD123")).thenReturn(Optional.of(order));
 
@@ -72,19 +82,18 @@ class OrderServiceCancelOrderTest {
                 .hasMessage("You cannot cancel this order");
 
         assertThat(product.getStockQuantity()).isEqualTo(3);
-        assertThat(order.getStatus()).isEqualTo("PLACED");
+        assertThat(order.getStatus()).isEqualTo(AppConstants.OrderStatus.PLACED);
 
-        verify(productRepo, never()).findByIdForUpdate(anyInt());
-        verify(productRepo, never()).saveAll(any());
+        verify(productRepo, never()).findByIdForUpdate(anyLong());
         verify(orderRepo, never()).save(any());
     }
 
     @Test
     void cancelOrder_whenOrderAlreadyCancelled_shouldThrowAndNotRestoreStockAgain() {
-        authenticateAs("buyer@example.com");
+        when(currentUserProvider.getAuthenticatedEmail()).thenReturn("buyer@example.com");
 
-        Product product = product(1, "Keyboard", 3);
-        Order order = order("ORD123", "buyer@example.com", "CANCELLED", product, 2);
+        Product product = product(1L, "Keyboard", 3);
+        Order order = order("ORD123", "buyer@example.com", AppConstants.OrderStatus.CANCELLED, product, 2);
 
         when(orderRepo.findByOrderId("ORD123")).thenReturn(Optional.of(order));
 
@@ -93,18 +102,11 @@ class OrderServiceCancelOrderTest {
 
         assertThat(product.getStockQuantity()).isEqualTo(3);
 
-        verify(productRepo, never()).findByIdForUpdate(anyInt());
-        verify(productRepo, never()).saveAll(any());
+        verify(productRepo, never()).findByIdForUpdate(anyLong());
         verify(orderRepo, never()).save(any());
     }
 
-    private void authenticateAs(String email) {
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(email, null, List.of())
-        );
-    }
-
-    private Product product(int id, String name, int stock) {
+    private Product product(Long id, String name, int stock) {
         Product product = new Product();
         product.setId(id);
         product.setName(name);
@@ -113,12 +115,21 @@ class OrderServiceCancelOrderTest {
         return product;
     }
 
-    private Order order(String orderId, String userEmail, String status, Product product, int quantity) {
+    private Order order(
+            String orderId,
+            String userEmail,
+            AppConstants.OrderStatus status,
+            Product product,
+            int quantity
+    ) {
         Order order = new Order();
         order.setOrderId(orderId);
         order.setCustomerName("Neeraj Kumar");
         order.setEmail("buyer@example.com");
         order.setMobileNo("9876543210");
+        order.setAddress("123 Main Road, Delhi, India");
+        order.setPaymentMode(AppConstants.PaymentMode.CASH_ON_DELIVERY);
+        order.setPaymentStatus(AppConstants.PaymentStatus.PENDING);
         order.setStatus(status);
         order.setOrderDate(LocalDate.now());
         order.setUserEmail(userEmail);

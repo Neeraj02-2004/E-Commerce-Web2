@@ -60,6 +60,9 @@ public class ReturnExchangeRequest {
     @Column(length = 100)
     private String gatewayRefundId;
 
+    @Column(length = 100)
+    private String refundIdempotencyKey;
+
     @Column(precision = 12, scale = 2)
     private BigDecimal refundAmount;
 

@@ -1,8 +1,7 @@
-package com.neeraj.SpringEcom.Service;
+package com.neeraj.SpringEcom.service;
 
 import com.neeraj.SpringEcom.exception.InvalidOrderException;
 import com.neeraj.SpringEcom.exception.OrderNotFoundException;
-import com.neeraj.SpringEcom.exception.UserNotAuthenticatedException;
 import com.neeraj.SpringEcom.model.AppConstants;
 import com.neeraj.SpringEcom.model.Order;
 import com.neeraj.SpringEcom.model.ReturnExchangeRequest;
@@ -11,10 +10,14 @@ import com.neeraj.SpringEcom.model.dto.ReturnExchangeDecisionRequest;
 import com.neeraj.SpringEcom.model.dto.ReturnExchangeResponse;
 import com.neeraj.SpringEcom.repo.OrderRepo;
 import com.neeraj.SpringEcom.repo.ReturnExchangeRepo;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.context.SecurityContextHolder;
+import com.neeraj.SpringEcom.security.CurrentUserProvider;
+import com.neeraj.SpringEcom.security.OrderOwnershipValidator;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -26,30 +29,35 @@ public class ReturnExchangeService {
     private final ReturnExchangeRepo returnExchangeRepo;
     private final OrderRepo orderRepo;
     private final PaymentService paymentService;
+    private final CurrentUserProvider currentUserProvider;
+    private final OrderOwnershipValidator orderOwnershipValidator;
+    private final TransactionTemplate requiresNewTransactionTemplate;
 
     public ReturnExchangeService(
             ReturnExchangeRepo returnExchangeRepo,
             OrderRepo orderRepo,
-            PaymentService paymentService
+            PaymentService paymentService,
+            PlatformTransactionManager transactionManager,
+            CurrentUserProvider currentUserProvider,
+            OrderOwnershipValidator orderOwnershipValidator
     ) {
         this.returnExchangeRepo = returnExchangeRepo;
         this.orderRepo = orderRepo;
         this.paymentService = paymentService;
+        this.currentUserProvider = currentUserProvider;
+        this.orderOwnershipValidator = orderOwnershipValidator;
+        this.requiresNewTransactionTemplate = new TransactionTemplate(transactionManager);
+        this.requiresNewTransactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     @Transactional
-    public ReturnExchangeResponse createRequest(
-            String orderId,
-            ReturnExchangeCreateRequest request
-    ) {
-        String userEmail = getAuthenticatedEmail();
+    public ReturnExchangeResponse createRequest(String orderId, ReturnExchangeCreateRequest request) {
+        String userEmail = currentUserProvider.getAuthenticatedEmail();
 
         Order order = orderRepo.findByOrderId(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
 
-        if (!userEmail.equalsIgnoreCase(order.getUserEmail())) {
-            throw new AccessDeniedException("You cannot create request for this order");
-        }
+        orderOwnershipValidator.assertReturnExchangeCanBeCreatedBy(order, userEmail);
 
         validateOrderEligible(order);
         String requestType = validateRequestType(request.requestType());
@@ -83,7 +91,7 @@ public class ReturnExchangeService {
 
     @Transactional(readOnly = true)
     public List<ReturnExchangeResponse> getMyRequests() {
-        String userEmail = getAuthenticatedEmail();
+        String userEmail = currentUserProvider.getAuthenticatedEmail();
 
         return returnExchangeRepo.findByUserEmailOrderByCreatedAtDesc(userEmail)
                 .stream()
@@ -100,10 +108,7 @@ public class ReturnExchangeService {
     }
 
     @Transactional
-    public ReturnExchangeResponse approveRequest(
-            String requestId,
-            ReturnExchangeDecisionRequest request
-    ) {
+    public ReturnExchangeResponse approveRequest(String requestId, ReturnExchangeDecisionRequest request) {
         ReturnExchangeRequest entity = getRequest(requestId);
 
         if (!AppConstants.ReturnExchangeStatus.REQUESTED.equals(entity.getStatus())) {
@@ -127,10 +132,7 @@ public class ReturnExchangeService {
     }
 
     @Transactional
-    public ReturnExchangeResponse rejectRequest(
-            String requestId,
-            ReturnExchangeDecisionRequest request
-    ) {
+    public ReturnExchangeResponse rejectRequest(String requestId, ReturnExchangeDecisionRequest request) {
         ReturnExchangeRequest entity = getRequest(requestId);
 
         if (!AppConstants.ReturnExchangeStatus.REQUESTED.equals(entity.getStatus())) {
@@ -146,10 +148,7 @@ public class ReturnExchangeService {
     }
 
     @Transactional
-    public ReturnExchangeResponse completeRequest(
-            String requestId,
-            ReturnExchangeDecisionRequest request
-    ) {
+    public ReturnExchangeResponse completeRequest(String requestId, ReturnExchangeDecisionRequest request) {
         ReturnExchangeRequest entity = getRequest(requestId);
 
         if (!AppConstants.ReturnExchangeStatus.APPROVED.equals(entity.getStatus())) {
@@ -188,29 +187,64 @@ public class ReturnExchangeService {
         entity.setRefundFailureReason(null);
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void completeApprovedRequestById(String requestId, String adminNote) {
+        ReturnExchangeRequest entity = getRequest(requestId);
+
+        if (!AppConstants.ReturnExchangeStatus.APPROVED.equals(entity.getStatus())) {
+            return;
+        }
+
+        completeApprovedRequest(entity, adminNote);
+        returnExchangeRepo.save(entity);
+    }
+
     private void processOnlineRefund(ReturnExchangeRequest entity) {
         try {
+            if (entity.getGatewayRefundId() != null && !entity.getGatewayRefundId().isBlank()) {
+                markRefundCompleted(entity);
+                return;
+            }
+
+            prepareRefundForProcessing(entity);
+
             PaymentService.RefundResult refundResult = paymentService.refundOnlinePayment(
                     entity.getOrder(),
-                    entity.getRequestId()
+                    entity.getRequestId(),
+                    entity.getRefundIdempotencyKey()
             );
 
             entity.setGatewayRefundId(refundResult.gatewayRefundId());
             entity.setRefundAmount(refundResult.refundAmount());
             entity.setRefundProcessedAt(refundResult.refundProcessedAt());
-            entity.setRefundStatus(AppConstants.RefundStatus.REFUNDED);
-            entity.setStatus(AppConstants.ReturnExchangeStatus.COMPLETED);
-            entity.setCompletedAt(LocalDateTime.now());
-            entity.setRefundFailureReason(null);
+            markRefundCompleted(entity);
         } catch (InvalidOrderException e) {
             entity.setRefundStatus(AppConstants.RefundStatus.REFUND_FAILED);
             entity.setRefundFailureReason(e.getMessage());
         }
     }
 
+    private void prepareRefundForProcessing(ReturnExchangeRequest entity) {
+        if (entity.getRefundIdempotencyKey() == null || entity.getRefundIdempotencyKey().isBlank()) {
+            entity.setRefundIdempotencyKey(UUID.randomUUID().toString());
+        }
+
+        entity.setRefundStatus(AppConstants.RefundStatus.REFUND_PROCESSING);
+        entity.setRefundFailureReason(null);
+
+        requiresNewTransactionTemplate.executeWithoutResult(status -> returnExchangeRepo.saveAndFlush(entity));
+    }
+
+    private void markRefundCompleted(ReturnExchangeRequest entity) {
+        entity.setRefundStatus(AppConstants.RefundStatus.REFUNDED);
+        entity.setStatus(AppConstants.ReturnExchangeStatus.COMPLETED);
+        entity.setCompletedAt(LocalDateTime.now());
+        entity.setRefundFailureReason(null);
+    }
+
     private boolean isOnlinePaidOrder(Order order) {
-        return AppConstants.PaymentMode.ONLINE.equals(order.getPaymentMode())
-                && AppConstants.PaymentStatus.PAID.equals(order.getPaymentStatus());
+        return order.getPaymentMode() == AppConstants.PaymentMode.ONLINE
+                && order.getPaymentStatus() == AppConstants.PaymentStatus.PAID;
     }
 
     private ReturnExchangeRequest getRequest(String requestId) {
@@ -219,7 +253,7 @@ public class ReturnExchangeService {
     }
 
     private void validateOrderEligible(Order order) {
-        if (!AppConstants.OrderStatus.DELIVERED.equals(order.getStatus())) {
+        if (order.getStatus() != AppConstants.OrderStatus.DELIVERED) {
             throw new InvalidOrderException("Return/exchange is allowed only for delivered orders");
         }
 
@@ -269,16 +303,6 @@ public class ReturnExchangeService {
         }
 
         return adminNote.trim().replaceAll("\\s+", " ");
-    }
-
-    private String getAuthenticatedEmail() {
-        var auth = SecurityContextHolder.getContext().getAuthentication();
-
-        if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getName())) {
-            throw new UserNotAuthenticatedException("User not authenticated");
-        }
-
-        return auth.getName().toLowerCase().trim();
     }
 
     private ReturnExchangeResponse toResponse(ReturnExchangeRequest entity) {

@@ -1,6 +1,6 @@
 package com.neeraj.SpringEcom.controller;
 
-import com.neeraj.SpringEcom.Service.OrderService;
+import com.neeraj.SpringEcom.service.OrderService;
 import com.neeraj.SpringEcom.model.dto.OrderRequest;
 import com.neeraj.SpringEcom.model.dto.OrderResponse;
 import com.neeraj.SpringEcom.model.dto.PageResponse;

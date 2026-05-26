@@ -2,7 +2,7 @@ package com.neeraj.SpringEcom.exception;
 
 public class WishlistItemAlreadyExistsException extends RuntimeException {
 
-    public WishlistItemAlreadyExistsException(int productId) {
+    public WishlistItemAlreadyExistsException(Long productId) {
         super("Product is already in wishlist: " + productId);
     }
 }

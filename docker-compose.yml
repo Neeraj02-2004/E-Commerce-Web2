@@ -2,6 +2,8 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: springecom-postgres
+    env_file:
+      - .env
     environment:
       POSTGRES_DB: springecom
       POSTGRES_USER: springecom
@@ -45,19 +47,8 @@ services:
       SPRING_PROFILES_ACTIVE: prod
       DB_URL: jdbc:postgresql://postgres:5432/springecom
       DB_USERNAME: springecom
-      DB_PASSWORD: ${DB_PASSWORD}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PASSWORD: ""
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_EXPIRATION_MS: 3600000
-      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID}
-      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET}
-      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET}
-      RAZORPAY_CURRENCY: ${RAZORPAY_CURRENCY:-INR}
-      CORS_ORIGINS: ${CORS_ORIGINS}
       PRODUCT_IMAGES_DIR: /app/uploads/products
     ports:
       - "8080:8080"

@@ -1,6 +1,6 @@
 package com.neeraj.SpringEcom.controller;
 
-import com.neeraj.SpringEcom.Service.PaymentService;
+import com.neeraj.SpringEcom.service.PaymentService;
 import com.neeraj.SpringEcom.model.dto.PaymentCreateRequest;
 import com.neeraj.SpringEcom.model.dto.PaymentCreateResponse;
 import com.neeraj.SpringEcom.model.dto.PaymentVerifyRequest;
@@ -34,5 +34,14 @@ public class PaymentController {
             @Valid @RequestBody PaymentVerifyRequest request
     ) {
         return ResponseEntity.ok(paymentService.verifyPayment(request));
+    }
+
+    @PostMapping("/webhook")
+    public ResponseEntity<String> handleWebhook(
+            @RequestBody String rawBody,
+            @RequestHeader(value = "X-Razorpay-Signature", required = false) String signature
+    ) {
+        paymentService.handleRazorpayWebhook(rawBody, signature);
+        return ResponseEntity.ok("ok");
     }
 }

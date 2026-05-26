@@ -1,48 +1,71 @@
-package com.neeraj.SpringEcom.Service;
+package com.neeraj.SpringEcom.service;
 
 import com.neeraj.SpringEcom.exception.InvalidOrderException;
 import com.neeraj.SpringEcom.exception.OrderNotFoundException;
 import com.neeraj.SpringEcom.model.AppConstants;
 import com.neeraj.SpringEcom.model.Order;
 import com.neeraj.SpringEcom.model.OrderItem;
+import com.neeraj.SpringEcom.model.RazorpayWebhookEvent;
 import com.neeraj.SpringEcom.model.dto.PaymentCreateRequest;
 import com.neeraj.SpringEcom.model.dto.PaymentCreateResponse;
 import com.neeraj.SpringEcom.model.dto.PaymentVerifyRequest;
 import com.neeraj.SpringEcom.model.dto.PaymentVerifyResponse;
+import com.neeraj.SpringEcom.payment.RazorpayGateway;
 import com.neeraj.SpringEcom.repo.OrderRepo;
-import com.razorpay.RazorpayClient;
-import com.razorpay.Refund;
+import com.neeraj.SpringEcom.repo.RazorpayWebhookEventRepo;
+import com.neeraj.SpringEcom.repo.ReturnExchangeRepo;
+import com.neeraj.SpringEcom.security.CurrentUserProvider;
+import com.neeraj.SpringEcom.security.OrderOwnershipValidator;
 import com.razorpay.Utils;
 import org.json.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.LocalDateTime;
+import java.util.HexFormat;
 
 @Service
 public class PaymentService {
 
+    private static final Logger log = LoggerFactory.getLogger(PaymentService.class);
+
     private final OrderRepo orderRepo;
-    private final RazorpayClient razorpayClient;
+    private final ReturnExchangeRepo returnExchangeRepo;
+    private final RazorpayWebhookEventRepo razorpayWebhookEventRepo;
+    private final CurrentUserProvider currentUserProvider;
+    private final OrderOwnershipValidator orderOwnershipValidator;
+    private final RazorpayGateway razorpayGateway;
     private final String razorpayKeyId;
-    private final String razorpayKeySecret;
+    private final String razorpayWebhookSecret;
     private final String currency;
 
     public PaymentService(
             OrderRepo orderRepo,
+            ReturnExchangeRepo returnExchangeRepo,
+            RazorpayWebhookEventRepo razorpayWebhookEventRepo,
+            CurrentUserProvider currentUserProvider,
+            OrderOwnershipValidator orderOwnershipValidator,
+            RazorpayGateway razorpayGateway,
             @Value("${razorpay.key-id}") String razorpayKeyId,
-            @Value("${razorpay.key-secret}") String razorpayKeySecret,
+            @Value("${razorpay.webhook-secret}") String razorpayWebhookSecret,
             @Value("${razorpay.currency:INR}") String currency
-    ) throws Exception {
+    ) {
         this.orderRepo = orderRepo;
+        this.returnExchangeRepo = returnExchangeRepo;
+        this.razorpayWebhookEventRepo = razorpayWebhookEventRepo;
+        this.currentUserProvider = currentUserProvider;
+        this.orderOwnershipValidator = orderOwnershipValidator;
+        this.razorpayGateway = razorpayGateway;
         this.razorpayKeyId = razorpayKeyId;
-        this.razorpayKeySecret = razorpayKeySecret;
+        this.razorpayWebhookSecret = razorpayWebhookSecret;
         this.currency = currency;
-        this.razorpayClient = new RazorpayClient(razorpayKeyId, razorpayKeySecret);
     }
 
     @Transactional
@@ -51,20 +74,18 @@ public class PaymentService {
             throw new InvalidOrderException("Order id is required");
         }
 
-        String userEmail = getAuthenticatedEmail();
+        String userEmail = currentUserProvider.getAuthenticatedEmail();
 
         Order order = orderRepo.findByOrderId(request.orderId())
                 .orElseThrow(() -> new OrderNotFoundException(request.orderId()));
 
-        if (!userEmail.equalsIgnoreCase(order.getUserEmail())) {
-            throw new AccessDeniedException("You cannot pay for this order");
-        }
+        orderOwnershipValidator.assertOrderCanBePaidBy(order, userEmail);
 
-        if (AppConstants.OrderStatus.CANCELLED.equals(order.getStatus())) {
+        if (order.getStatus() == AppConstants.OrderStatus.CANCELLED) {
             throw new InvalidOrderException("Cannot pay for cancelled order");
         }
 
-        if (AppConstants.PaymentStatus.PAID.equals(order.getPaymentStatus())) {
+        if (order.getPaymentStatus() == AppConstants.PaymentStatus.PAID) {
             throw new InvalidOrderException("Order is already paid");
         }
 
@@ -72,33 +93,32 @@ public class PaymentService {
         long amountInPaise = totalAmount.multiply(BigDecimal.valueOf(100)).longValueExact();
 
         try {
-            JSONObject options = new JSONObject();
-            options.put("amount", amountInPaise);
-            options.put("currency", currency);
-            options.put("receipt", order.getOrderId());
-            options.put("payment_capture", 1);
-
-            com.razorpay.Order razorpayOrder = razorpayClient.orders.create(options);
-
-            String razorpayOrderId = razorpayOrder.get("id");
+            RazorpayGateway.GatewayOrder gatewayOrder = razorpayGateway.createOrder(
+                    amountInPaise,
+                    currency,
+                    order.getOrderId()
+            );
 
             order.setPaymentMode(AppConstants.PaymentMode.ONLINE);
             order.setPaymentStatus(AppConstants.PaymentStatus.PENDING);
-            order.setGatewayOrderId(razorpayOrderId);
+            order.setGatewayOrderId(gatewayOrder.id());
 
             orderRepo.save(order);
 
             return new PaymentCreateResponse(
                     razorpayKeyId,
                     order.getOrderId(),
-                    razorpayOrderId,
+                    gatewayOrder.id(),
                     amountInPaise,
                     currency,
                     order.getCustomerName(),
                     order.getEmail(),
                     order.getMobileNo()
             );
+        } catch (InvalidOrderException e) {
+            throw e;
         } catch (Exception e) {
+            log.error("Razorpay payment order creation failed for order {}", order.getOrderId(), e);
             throw new InvalidOrderException("Unable to create payment order");
         }
     }
@@ -107,63 +127,253 @@ public class PaymentService {
     public PaymentVerifyResponse verifyPayment(PaymentVerifyRequest request) {
         validateVerifyRequest(request);
 
-        String userEmail = getAuthenticatedEmail();
+        String userEmail = currentUserProvider.getAuthenticatedEmail();
 
         Order order = orderRepo.findByOrderId(request.orderId())
                 .orElseThrow(() -> new OrderNotFoundException(request.orderId()));
 
-        if (!userEmail.equalsIgnoreCase(order.getUserEmail())) {
-            throw new AccessDeniedException("You cannot verify this payment");
-        }
+        orderOwnershipValidator.assertOrderPaymentCanBeVerifiedBy(order, userEmail);
 
         if (!request.razorpayOrderId().equals(order.getGatewayOrderId())) {
             throw new InvalidOrderException("Payment order id does not match");
         }
 
-        try {
-            JSONObject attributes = new JSONObject();
-            attributes.put("razorpay_order_id", request.razorpayOrderId());
-            attributes.put("razorpay_payment_id", request.razorpayPaymentId());
-            attributes.put("razorpay_signature", request.razorpaySignature());
+        boolean validSignature = razorpayGateway.verifyPaymentSignature(
+                request.razorpayOrderId(),
+                request.razorpayPaymentId(),
+                request.razorpaySignature()
+        );
 
-            boolean validSignature = Utils.verifyPaymentSignature(attributes, razorpayKeySecret);
-
-            if (!validSignature) {
-                order.setPaymentStatus(AppConstants.PaymentStatus.FAILED);
-                orderRepo.save(order);
-                throw new InvalidOrderException("Invalid payment signature");
-            }
-
-            order.setPaymentMode(AppConstants.PaymentMode.ONLINE);
-            order.setPaymentStatus(AppConstants.PaymentStatus.PAID);
-            order.setGatewayPaymentId(request.razorpayPaymentId());
-            order.setGatewaySignature(request.razorpaySignature());
-            order.setPaidAt(LocalDateTime.now());
-
+        if (!validSignature) {
+            order.setPaymentStatus(AppConstants.PaymentStatus.FAILED);
             orderRepo.save(order);
+            throw new InvalidOrderException("Invalid payment signature");
+        }
 
-            return new PaymentVerifyResponse(
-                    order.getOrderId(),
-                    order.getPaymentStatus(),
-                    "Payment verified successfully"
-            );
-        } catch (InvalidOrderException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new InvalidOrderException("Payment verification failed");
+        order.setPaymentMode(AppConstants.PaymentMode.ONLINE);
+        order.setPaymentStatus(AppConstants.PaymentStatus.PAID);
+        order.setGatewayPaymentId(request.razorpayPaymentId());
+        order.setGatewaySignature(request.razorpaySignature());
+        order.setPaidAt(LocalDateTime.now());
+
+        orderRepo.save(order);
+
+        return new PaymentVerifyResponse(
+                order.getOrderId(),
+                order.getPaymentStatus().name(),
+                "Payment verified successfully"
+        );
+    }
+
+    @Transactional
+    public void handleRazorpayWebhook(String rawBody, String signature) {
+        verifyWebhookSignature(rawBody, signature);
+
+        JSONObject event = new JSONObject(rawBody);
+        String eventId = getWebhookEventId(event, rawBody);
+        String eventType = event.optString("event", "unknown");
+
+        if (razorpayWebhookEventRepo.existsByEventId(eventId)) {
+            return;
+        }
+
+        RazorpayWebhookEvent webhookEvent = new RazorpayWebhookEvent();
+        webhookEvent.setEventId(eventId);
+        webhookEvent.setEventType(eventType);
+        webhookEvent.setRawBody(rawBody);
+
+        try {
+            razorpayWebhookEventRepo.saveAndFlush(webhookEvent);
+        } catch (DataIntegrityViolationException e) {
+            return;
+        }
+
+        switch (eventType) {
+            case "payment.captured" -> handlePaymentCaptured(event);
+            case "payment.failed" -> handlePaymentFailed(event);
+            case "refund.created", "refund.speed_changed" -> handleRefundProcessing(event);
+            case "refund.processed" -> handleRefundProcessed(event);
+            case "refund.failed" -> handleRefundFailed(event);
+            default -> {
+            }
         }
     }
 
-    public RefundResult refundOnlinePayment(Order order, String refundReceipt) {
+    public RefundResult refundOnlinePayment(Order order, String refundReceipt, String idempotencyKey) {
+        validateRefundRequest(order, idempotencyKey);
+
+        BigDecimal totalAmount = calculateOrderTotal(order);
+        long amountInPaise = totalAmount.multiply(BigDecimal.valueOf(100)).longValueExact();
+        String paymentId = order.getGatewayPaymentId();
+
+        RazorpayGateway.GatewayRefund existingRefund = razorpayGateway
+                .findRefundByIdempotencyKey(paymentId, idempotencyKey, amountInPaise)
+                .orElse(null);
+
+        if (existingRefund != null) {
+            return toRefundResult(existingRefund);
+        }
+
+        try {
+            RazorpayGateway.GatewayRefund refund = razorpayGateway.createRefund(
+                    paymentId,
+                    amountInPaise,
+                    refundReceipt,
+                    idempotencyKey
+            );
+
+            return toRefundResult(refund);
+        } catch (InvalidOrderException e) {
+            return razorpayGateway.findRefundByIdempotencyKey(paymentId, idempotencyKey, amountInPaise)
+                    .map(this::toRefundResult)
+                    .orElseThrow(() -> e);
+        } catch (Exception e) {
+            log.error("Razorpay refund failed for order {}", order.getOrderId(), e);
+
+            return razorpayGateway.findRefundByIdempotencyKey(paymentId, idempotencyKey, amountInPaise)
+                    .map(this::toRefundResult)
+                    .orElseThrow(() -> new InvalidOrderException("Unable to process Razorpay refund"));
+        }
+    }
+
+    private void verifyWebhookSignature(String rawBody, String signature) {
+        if (razorpayWebhookSecret == null || razorpayWebhookSecret.isBlank()) {
+            throw new InvalidOrderException("Razorpay webhook secret is not configured");
+        }
+
+        if (signature == null || signature.isBlank()) {
+            throw new InvalidOrderException("Razorpay webhook signature is missing");
+        }
+
+        try {
+            Utils.verifyWebhookSignature(rawBody, signature, razorpayWebhookSecret);
+        } catch (Exception e) {
+            throw new InvalidOrderException("Invalid Razorpay webhook signature");
+        }
+    }
+
+    private String getWebhookEventId(JSONObject event, String rawBody) {
+        String eventId = event.optString("id", null);
+
+        if (eventId != null && !eventId.isBlank()) {
+            return eventId;
+        }
+
+        return "sha256_" + sha256(rawBody);
+    }
+
+    private String sha256(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(value.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (Exception e) {
+            throw new InvalidOrderException("Unable to process webhook event");
+        }
+    }
+
+    private void handlePaymentCaptured(JSONObject event) {
+        JSONObject payment = getPayloadEntity(event, "payment");
+        String gatewayOrderId = payment.optString("order_id", null);
+        String gatewayPaymentId = payment.optString("id", null);
+
+        if (gatewayOrderId == null || gatewayOrderId.isBlank()) {
+            return;
+        }
+
+        orderRepo.findByGatewayOrderId(gatewayOrderId).ifPresent(order -> {
+            order.setPaymentMode(AppConstants.PaymentMode.ONLINE);
+            order.setPaymentStatus(AppConstants.PaymentStatus.PAID);
+            order.setGatewayPaymentId(gatewayPaymentId);
+            order.setPaidAt(LocalDateTime.now());
+            orderRepo.save(order);
+        });
+    }
+
+    private void handlePaymentFailed(JSONObject event) {
+        JSONObject payment = getPayloadEntity(event, "payment");
+        String gatewayOrderId = payment.optString("order_id", null);
+        String gatewayPaymentId = payment.optString("id", null);
+
+        if (gatewayOrderId == null || gatewayOrderId.isBlank()) {
+            return;
+        }
+
+        orderRepo.findByGatewayOrderId(gatewayOrderId).ifPresent(order -> {
+            if (order.getPaymentStatus() != AppConstants.PaymentStatus.PAID) {
+                order.setPaymentMode(AppConstants.PaymentMode.ONLINE);
+                order.setPaymentStatus(AppConstants.PaymentStatus.FAILED);
+                order.setGatewayPaymentId(gatewayPaymentId);
+                orderRepo.save(order);
+            }
+        });
+    }
+
+    private void handleRefundProcessing(JSONObject event) {
+        JSONObject refund = getPayloadEntity(event, "refund");
+        String gatewayRefundId = refund.optString("id", null);
+
+        if (gatewayRefundId == null || gatewayRefundId.isBlank()) {
+            return;
+        }
+
+        returnExchangeRepo.findByGatewayRefundId(gatewayRefundId).ifPresent(request -> {
+            request.setRefundStatus(AppConstants.RefundStatus.REFUND_PROCESSING);
+            request.setRefundFailureReason(null);
+            returnExchangeRepo.save(request);
+        });
+    }
+
+    private void handleRefundProcessed(JSONObject event) {
+        JSONObject refund = getPayloadEntity(event, "refund");
+        String gatewayRefundId = refund.optString("id", null);
+
+        if (gatewayRefundId == null || gatewayRefundId.isBlank()) {
+            return;
+        }
+
+        returnExchangeRepo.findByGatewayRefundId(gatewayRefundId).ifPresent(request -> {
+            request.setRefundStatus(AppConstants.RefundStatus.REFUNDED);
+            request.setStatus(AppConstants.ReturnExchangeStatus.COMPLETED);
+            request.setCompletedAt(LocalDateTime.now());
+            request.setRefundProcessedAt(LocalDateTime.now());
+            request.setRefundFailureReason(null);
+            returnExchangeRepo.save(request);
+        });
+    }
+
+    private void handleRefundFailed(JSONObject event) {
+        JSONObject refund = getPayloadEntity(event, "refund");
+        String gatewayRefundId = refund.optString("id", null);
+
+        if (gatewayRefundId == null || gatewayRefundId.isBlank()) {
+            return;
+        }
+
+        returnExchangeRepo.findByGatewayRefundId(gatewayRefundId).ifPresent(request -> {
+            request.setRefundStatus(AppConstants.RefundStatus.REFUND_FAILED);
+            request.setRefundFailureReason("Razorpay refund failed");
+            returnExchangeRepo.save(request);
+        });
+    }
+
+    private JSONObject getPayloadEntity(JSONObject event, String entityName) {
+        return event
+                .optJSONObject("payload")
+                .optJSONObject(entityName)
+                .optJSONObject("entity");
+    }
+
+    private void validateRefundRequest(Order order, String idempotencyKey) {
         if (order == null) {
             throw new InvalidOrderException("Order is required for refund");
         }
 
-        if (!AppConstants.PaymentMode.ONLINE.equals(order.getPaymentMode())) {
+        if (order.getPaymentMode() != AppConstants.PaymentMode.ONLINE) {
             throw new InvalidOrderException("Only online payments can be refunded through Razorpay");
         }
 
-        if (!AppConstants.PaymentStatus.PAID.equals(order.getPaymentStatus())) {
+        if (order.getPaymentStatus() != AppConstants.PaymentStatus.PAID) {
             throw new InvalidOrderException("Only paid orders can be refunded");
         }
 
@@ -171,25 +381,17 @@ public class PaymentService {
             throw new InvalidOrderException("Razorpay payment id is missing");
         }
 
-        BigDecimal totalAmount = calculateOrderTotal(order);
-        long amountInPaise = totalAmount.multiply(BigDecimal.valueOf(100)).longValueExact();
-
-        try {
-            JSONObject options = new JSONObject();
-            options.put("amount", amountInPaise);
-            options.put("speed", "normal");
-            options.put("receipt", refundReceipt);
-
-            Refund refund = razorpayClient.payments.refund(order.getGatewayPaymentId(), options);
-
-            return new RefundResult(
-                    refund.get("id"),
-                    BigDecimal.valueOf(amountInPaise).divide(BigDecimal.valueOf(100)),
-                    LocalDateTime.now()
-            );
-        } catch (Exception e) {
-            throw new InvalidOrderException("Unable to process Razorpay refund");
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            throw new InvalidOrderException("Refund idempotency key is missing");
         }
+    }
+
+    private RefundResult toRefundResult(RazorpayGateway.GatewayRefund refund) {
+        return new RefundResult(
+                refund.id(),
+                BigDecimal.valueOf(refund.amountInPaise()).divide(BigDecimal.valueOf(100)),
+                LocalDateTime.now()
+        );
     }
 
     private void validateVerifyRequest(PaymentVerifyRequest request) {
@@ -219,16 +421,6 @@ public class PaymentService {
                 .stream()
                 .map(OrderItem::getTotalPrice)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
-
-    private String getAuthenticatedEmail() {
-        var auth = SecurityContextHolder.getContext().getAuthentication();
-
-        if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getName())) {
-            throw new com.neeraj.SpringEcom.exception.UserNotAuthenticatedException("User not authenticated");
-        }
-
-        return auth.getName().toLowerCase().trim();
     }
 
     public record RefundResult(

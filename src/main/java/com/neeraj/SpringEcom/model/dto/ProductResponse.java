@@ -4,7 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 public record ProductResponse(
-        int id,
+        Long id,
         String name,
         String description,
         String brand,

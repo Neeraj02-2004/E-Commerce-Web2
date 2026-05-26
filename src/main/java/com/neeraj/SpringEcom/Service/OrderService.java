@@ -1,5 +1,4 @@
-
-package com.neeraj.SpringEcom.Service;
+package com.neeraj.SpringEcom.service;
 
 import com.neeraj.SpringEcom.exception.InsufficientStockException;
 import com.neeraj.SpringEcom.exception.InvalidOrderException;
@@ -11,6 +10,7 @@ import com.neeraj.SpringEcom.model.AppConstants;
 import com.neeraj.SpringEcom.model.Order;
 import com.neeraj.SpringEcom.model.OrderItem;
 import com.neeraj.SpringEcom.model.Product;
+import com.neeraj.SpringEcom.model.User;
 import com.neeraj.SpringEcom.model.dto.OrderItemRequest;
 import com.neeraj.SpringEcom.model.dto.OrderItemResponse;
 import com.neeraj.SpringEcom.model.dto.OrderRequest;
@@ -18,45 +18,63 @@ import com.neeraj.SpringEcom.model.dto.OrderResponse;
 import com.neeraj.SpringEcom.model.dto.PageResponse;
 import com.neeraj.SpringEcom.repo.OrderRepo;
 import com.neeraj.SpringEcom.repo.ProductRepo;
+import com.neeraj.SpringEcom.repo.UserRepo;
+import com.neeraj.SpringEcom.security.CurrentUserProvider;
+import com.neeraj.SpringEcom.security.OrderOwnershipValidator;
+import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import com.neeraj.SpringEcom.util.EmailNormalizer;
 
 @Service
 public class OrderService {
 
     private final ProductRepo productRepo;
     private final OrderRepo orderRepo;
+    private final UserRepo userRepo;
+    private final CurrentUserProvider currentUserProvider;
+    private final OrderOwnershipValidator orderOwnershipValidator;
+    private final CacheManager cacheManager;
+    private final EmailNormalizer emailNormalizer;
 
-    public OrderService(ProductRepo productRepo, OrderRepo orderRepo) {
+    public OrderService(
+            ProductRepo productRepo,
+            OrderRepo orderRepo,
+            UserRepo userRepo,
+            CurrentUserProvider currentUserProvider,
+            OrderOwnershipValidator orderOwnershipValidator,
+            CacheManager cacheManager,
+            EmailNormalizer emailNormalizer
+    ) {
         this.productRepo = productRepo;
         this.orderRepo = orderRepo;
+        this.userRepo = userRepo;
+        this.currentUserProvider = currentUserProvider;
+        this.orderOwnershipValidator = orderOwnershipValidator;
+        this.cacheManager = cacheManager;
+        this.emailNormalizer = emailNormalizer;
     }
 
     @Transactional
-    @Caching(evict = {
-            @CacheEvict(value = "product", allEntries = true),
-            @CacheEvict(value = "products", allEntries = true),
-            @CacheEvict(value = "searchProducts", allEntries = true)
-    })
+    @CacheEvict(value = "products", allEntries = true)
     public OrderResponse placeOrder(OrderRequest request) {
         validateOrderRequest(request);
 
-        String userEmail = getAuthenticatedEmail();
-        String paymentMode = validatePaymentMode(request.paymentMode());
+        User user = getCurrentUser();
+        String userEmail = user.getEmail();
+        AppConstants.PaymentMode paymentMode = validatePaymentMode(request.paymentMode());
 
         Order order = new Order();
         order.setOrderId("ORD" + UUID.randomUUID().toString().replace("-", "").toUpperCase());
@@ -68,12 +86,18 @@ public class OrderService {
         order.setPaymentStatus(AppConstants.PaymentStatus.PENDING);
         order.setStatus(AppConstants.OrderStatus.PLACED);
         order.setOrderDate(LocalDate.now());
+        order.setUser(user);
         order.setUserEmail(userEmail);
 
         List<OrderItem> orderItems = new ArrayList<>();
         List<Product> updatedProducts = new ArrayList<>();
 
-        for (OrderItemRequest itemReq : request.items()) {
+        List<OrderItemRequest> sortedItems = request.items()
+                .stream()
+                .sorted(Comparator.comparing(OrderItemRequest::productId))
+                .toList();
+
+        for (OrderItemRequest itemReq : sortedItems) {
             validateOrderItemRequest(itemReq);
 
             Product product = productRepo.findByIdForUpdate(itemReq.productId())
@@ -86,9 +110,7 @@ public class OrderService {
             int updatedStock = product.getStockQuantity() - itemReq.quantity();
 
             if (updatedStock < 0) {
-                throw new InsufficientStockException(
-                        "Insufficient stock for product: " + product.getName()
-                );
+                throw new InsufficientStockException("Insufficient stock for product: " + product.getName());
             }
 
             product.setStockQuantity(updatedStock);
@@ -103,25 +125,22 @@ public class OrderService {
             orderItems.add(item);
         }
 
-        productRepo.saveAll(updatedProducts);
+        evictProductCaches(updatedProducts);
 
         order.setOrderItems(orderItems);
 
-        Order saved = orderRepo.save(order);
-
-        return toResponse(saved);
+        return toResponse(orderRepo.save(order));
     }
 
     @Transactional(readOnly = true)
     public PageResponse<OrderResponse> getAllOrderResponses(int page, int size) {
-        String userEmail = getAuthenticatedEmail();
+        User user = getCurrentUser();
 
         int safePage = Math.max(page, 0);
         int safeSize = Math.min(Math.max(size, 1), 50);
 
         Pageable pageable = PageRequest.of(safePage, safeSize);
-
-        Page<Long> orderIdPage = orderRepo.findOrderIdsByUserEmail(userEmail, pageable);
+        Page<Long> orderIdPage = orderRepo.findOrderIdsByUserId(user.getId(), pageable);
 
         List<Order> orders = orderIdPage.getContent().isEmpty()
                 ? List.of()
@@ -149,32 +168,31 @@ public class OrderService {
     }
 
     @Transactional
-    @Caching(evict = {
-            @CacheEvict(value = "product", allEntries = true),
-            @CacheEvict(value = "products", allEntries = true),
-            @CacheEvict(value = "searchProducts", allEntries = true)
-    })
+    @CacheEvict(value = "products", allEntries = true)
     public OrderResponse cancelOrder(String orderId) {
-        String userEmail = getAuthenticatedEmail();
+        String userEmail = currentUserProvider.getAuthenticatedEmail();
 
         Order order = orderRepo.findByOrderId(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
 
-        if (!userEmail.equalsIgnoreCase(order.getUserEmail())) {
-            throw new AccessDeniedException("You cannot cancel this order");
-        }
+        orderOwnershipValidator.assertOrderCanBeCancelledBy(order, userEmail);
 
-        if (AppConstants.OrderStatus.CANCELLED.equals(order.getStatus())) {
+        if (order.getStatus() == AppConstants.OrderStatus.CANCELLED) {
             throw new OrderAlreadyCancelledException(orderId);
         }
 
-        if (AppConstants.PaymentStatus.PAID.equals(order.getPaymentStatus())) {
+        if (order.getPaymentStatus() == AppConstants.PaymentStatus.PAID) {
             throw new InvalidOrderException("Paid orders cannot be cancelled from this endpoint");
         }
 
+        List<OrderItem> sortedOrderItems = order.getOrderItems()
+                .stream()
+                .sorted(Comparator.comparing(item -> item.getProduct().getId()))
+                .toList();
+
         List<Product> updatedProducts = new ArrayList<>();
 
-        for (OrderItem item : order.getOrderItems()) {
+        for (OrderItem item : sortedOrderItems) {
             Product product = productRepo.findByIdForUpdate(item.getProduct().getId())
                     .orElseThrow(() -> new ProductNotFoundException(item.getProduct().getId()));
 
@@ -182,13 +200,30 @@ public class OrderService {
             updatedProducts.add(product);
         }
 
-        productRepo.saveAll(updatedProducts);
+        evictProductCaches(updatedProducts);
 
         order.setStatus(AppConstants.OrderStatus.CANCELLED);
 
-        Order saved = orderRepo.save(order);
+        return toResponse(orderRepo.save(order));
+    }
 
-        return toResponse(saved);
+    private void evictProductCaches(List<Product> products) {
+        var productCache = cacheManager.getCache("product");
+
+        if (productCache == null) {
+            return;
+        }
+
+        for (Product product : products) {
+            productCache.evict(product.getId());
+        }
+    }
+
+    private User getCurrentUser() {
+        String userEmail = currentUserProvider.getAuthenticatedEmail();
+
+        return userRepo.findByEmail(userEmail)
+                .orElseThrow(() -> new UserNotAuthenticatedException("User not authenticated"));
     }
 
     private void validateOrderRequest(OrderRequest request) {
@@ -215,16 +250,6 @@ public class OrderService {
         }
     }
 
-    private String getAuthenticatedEmail() {
-        var auth = SecurityContextHolder.getContext().getAuthentication();
-
-        if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getName())) {
-            throw new UserNotAuthenticatedException("User not authenticated");
-        }
-
-        return auth.getName().toLowerCase().trim();
-    }
-
     private String validateName(String name) {
         if (name == null || name.isBlank()) {
             throw new InvalidOrderException("Customer name is required");
@@ -244,7 +269,7 @@ public class OrderService {
             throw new InvalidOrderException("Email is required");
         }
 
-        String cleanEmail = email.trim().toLowerCase();
+        String cleanEmail = emailNormalizer.normalize(email);
 
         if (!cleanEmail.matches("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$")) {
             throw new InvalidOrderException("Invalid email format");
@@ -293,25 +318,21 @@ public class OrderService {
         return cleanAddress;
     }
 
-
-    private String validatePaymentMode(String paymentMode) {
+    private AppConstants.PaymentMode validatePaymentMode(String paymentMode) {
         if (paymentMode == null || paymentMode.isBlank()) {
             throw new InvalidOrderException("Payment mode is required");
         }
 
         String cleanPaymentMode = paymentMode.trim().toUpperCase().replace(" ", "_");
 
-        if ("COD".equals(cleanPaymentMode)) {
-            return AppConstants.PaymentMode.CASH_ON_DELIVERY;
-        }
-
-        if (AppConstants.PaymentMode.CASH_ON_DELIVERY.equals(cleanPaymentMode)) {
+        if ("COD".equals(cleanPaymentMode)
+                || AppConstants.PaymentMode.CASH_ON_DELIVERY.name().equals(cleanPaymentMode)) {
             return AppConstants.PaymentMode.CASH_ON_DELIVERY;
         }
 
         if ("RAZORPAY".equals(cleanPaymentMode)
                 || "ONLINE_PAYMENT".equals(cleanPaymentMode)
-                || AppConstants.PaymentMode.ONLINE.equals(cleanPaymentMode)) {
+                || AppConstants.PaymentMode.ONLINE.name().equals(cleanPaymentMode)) {
             return AppConstants.PaymentMode.ONLINE;
         }
 

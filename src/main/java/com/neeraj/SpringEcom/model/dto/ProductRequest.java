@@ -3,6 +3,7 @@ package com.neeraj.SpringEcom.model.dto;
 import jakarta.validation.constraints.*;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 public record ProductRequest(
 
@@ -25,6 +26,8 @@ public record ProductRequest(
         @NotBlank(message = "Category is required")
         @Size(max = 80, message = "Category must not exceed 80 characters")
         String category,
+
+        LocalDate releaseDate,
 
         boolean productAvailable,
 

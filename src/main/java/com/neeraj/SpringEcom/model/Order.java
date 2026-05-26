@@ -3,15 +3,17 @@ package com.neeraj.SpringEcom.model;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -27,7 +29,8 @@ import java.util.List;
 @Table(
         name = "orders",
         indexes = {
-                @Index(name = "idx_orders_user_email", columnList = "userEmail")
+                @Index(name = "idx_orders_user_id", columnList = "user_id"),
+                @Index(name = "idx_orders_user_email", columnList = "user_email")
         }
 )
 public class Order {
@@ -45,31 +48,33 @@ public class Order {
     @Column(nullable = false)
     private String email;
 
-    @NotBlank(message = "Mobile number is required")
-    @Pattern(regexp = "^[6-9]\\d{9}$", message = "Invalid Indian mobile number")
-    @Size(min = 10, max = 10, message = "Mobile number must be 10 digits")
     @Column(nullable = false, length = 10)
     private String mobileNo;
 
-    @NotBlank(message = "Address is required")
-    @Size(min = 10, max = 500, message = "Address must be between 10 and 500 characters")
     @Column(nullable = false, length = 500)
     private String address;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)
-    private String paymentMode;
+    private AppConstants.PaymentMode paymentMode;
 
-    @Column(nullable = false)
-    private String status;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private AppConstants.OrderStatus status;
 
     @Column(nullable = false)
     private LocalDate orderDate;
 
-    @Column(nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
+
+    @Column(name = "user_email", nullable = false)
     private String userEmail;
 
-    @Column(nullable = false)
-    private String paymentStatus;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private AppConstants.PaymentStatus paymentStatus;
 
     private String gatewayOrderId;
 
