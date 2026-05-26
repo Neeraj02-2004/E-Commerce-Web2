@@ -3,7 +3,6 @@ package com.neeraj.SpringEcom.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
-import io.github.bucket4j.Refill;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -120,10 +119,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
 
     private Bucket createBucket(RateLimitRule rule) {
-        Bandwidth limit = Bandwidth.classic(
-                rule.capacity(),
-                Refill.intervally(rule.capacity(), rule.window())
-        );
+        Bandwidth limit = Bandwidth.builder()
+                .capacity(rule.capacity())
+                .refillIntervally(rule.capacity(), rule.window())
+                .build();
 
         return Bucket.builder()
                 .addLimit(limit)

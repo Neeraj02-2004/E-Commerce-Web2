@@ -9,14 +9,11 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.AuthenticationProvider;
-import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
@@ -35,20 +32,17 @@ import java.util.Map;
 @EnableWebSecurity
 public class SecurityConfig {
 
-    private final UserDetailsService userDetailsService;
     private final JwtFilter jwtFilter;
     private final RateLimitFilter rateLimitFilter;
     private final ObjectMapper objectMapper;
     private final String corsOrigins;
 
     public SecurityConfig(
-            UserDetailsService userDetailsService,
             JwtFilter jwtFilter,
             RateLimitFilter rateLimitFilter,
             ObjectMapper objectMapper,
             @Value("${app.cors.origins:http://localhost:5173}") String corsOrigins
     ) {
-        this.userDetailsService = userDetailsService;
         this.jwtFilter = jwtFilter;
         this.rateLimitFilter = rateLimitFilter;
         this.objectMapper = objectMapper;
@@ -101,8 +95,6 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
 
-                .authenticationProvider(authProvider())
-
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
@@ -120,16 +112,6 @@ public class SecurityConfig {
         FilterRegistrationBean<RateLimitFilter> registration = new FilterRegistrationBean<>(rateLimitFilter);
         registration.setEnabled(false);
         return registration;
-    }
-
-    @Bean
-    public AuthenticationProvider authProvider() {
-        DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
-
-        provider.setUserDetailsService(userDetailsService);
-        provider.setPasswordEncoder(passwordEncoder());
-
-        return provider;
     }
 
     @Bean

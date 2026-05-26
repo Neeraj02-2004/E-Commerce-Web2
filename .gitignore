@@ -13,6 +13,9 @@ src/main/resources/application-local.properties
 ### Uploaded files ###
 uploads/
 
+### JVM crash logs ###
+hs_err_pid*.log
+
 ### STS ###
 .apt_generated
 .classpath

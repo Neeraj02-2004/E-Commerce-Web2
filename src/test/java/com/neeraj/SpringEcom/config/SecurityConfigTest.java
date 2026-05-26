@@ -1,11 +1,15 @@
 package com.neeraj.SpringEcom.config;
 
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
 import com.neeraj.SpringEcom.service.JwtService;
 import com.neeraj.SpringEcom.service.MyUserDetailsService;
 import com.neeraj.SpringEcom.service.OrderService;
 import com.neeraj.SpringEcom.service.ProductService;
+import com.neeraj.SpringEcom.service.UserService;
 import com.neeraj.SpringEcom.controller.OrderController;
 import com.neeraj.SpringEcom.controller.ProductController;
+import com.neeraj.SpringEcom.controller.UserController;
+import com.neeraj.SpringEcom.repo.UserRepo;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -18,6 +22,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
@@ -27,11 +32,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = {
         ProductController.class,
-        OrderController.class
+        OrderController.class,
+        UserController.class
 })
 @Import({
         SecurityConfig.class,
@@ -57,6 +64,15 @@ class SecurityConfigTest {
 
     @MockBean
     private MyUserDetailsService myUserDetailsService;
+
+    @MockBean
+    private UserService userService;
+
+    @MockBean
+    private UserRepo userRepo;
+
+    @MockBean
+    private GoogleIdTokenVerifier googleIdTokenVerifier;
 
     @MockBean
     private CacheManager cacheManager;
@@ -163,6 +179,28 @@ class SecurityConfigTest {
         mockMvc.perform(post("/api/payments/create")
                         .with(user("admin@example.com").roles("ADMIN")))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void rateLimitFilter_shouldApplyInsideSecurityChain() throws Exception {
+        String clientIp = "203.0.113.77";
+
+        for (int i = 0; i < 10; i++) {
+            mockMvc.perform(post("/api/login")
+                            .header("X-Forwarded-For", clientIp)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(result ->
+                            assertThat(result.getResponse().getStatus()).isNotEqualTo(429)
+                    );
+        }
+
+        mockMvc.perform(post("/api/login")
+                        .header("X-Forwarded-For", clientIp)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("RATE_LIMIT_EXCEEDED")));
     }
 
     @Test

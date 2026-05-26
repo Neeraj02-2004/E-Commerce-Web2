@@ -50,9 +50,14 @@ RAZORPAY_KEY_ID=change-me-razorpay-key-id
 RAZORPAY_KEY_SECRET=change-me-razorpay-key-secret
 RAZORPAY_WEBHOOK_SECRET=change-me-razorpay-webhook-secret
 RAZORPAY_CURRENCY=INR
+
+JWT_EXPIRATION_MS=3600000
+REDIS_PASSWORD=change-me-strong-redis-password
+
+PRODUCT_IMAGES_DIR=/app/uploads/products
 ```
 
-Important: never commit the real `.env` file to GitHub.
+Important: never commit the real `.env` file to GitHub. For client delivery, send `.env.example` and ask the client/deployment owner to create their own `.env` with live secrets on the server.
 
 ## Run With Docker
 
@@ -61,6 +66,15 @@ Start the full backend stack:
 ```powershell
 docker compose up --build
 ```
+
+Start the production-style stack:
+
+```powershell
+docker compose -f docker-compose.prod.yml up --build -d
+```
+
+The production-style compose file exposes only the API port. PostgreSQL and Redis stay private inside Docker.
+It also requires `REDIS_PASSWORD` in `.env`.
 
 API URL:
 
@@ -109,7 +123,7 @@ Run return/exchange refund tests:
 Latest verified result:
 
 ```text
-57+ tests passing, 0 failures, 0 errors
+124 tests passing, 0 failures, 0 errors
 ```
 
 If Docker Desktop is not running, the Testcontainers integration test may be skipped automatically depending on environment.
@@ -129,6 +143,8 @@ Expected response:
 ```
 
 ## Swagger API Docs
+
+Swagger is for local/admin verification. It is disabled in the production profile.
 
 Swagger UI:
 
@@ -437,7 +453,6 @@ Public endpoints:
 - Product read APIs
 - Product image APIs
 - Health endpoint
-- Swagger/OpenAPI docs
 - Razorpay webhook
 
 User-only endpoints:
@@ -453,12 +468,15 @@ Admin-only endpoints:
 
 - Product create/update/delete APIs
 - Admin return/exchange APIs
+- Swagger/OpenAPI docs when enabled locally
 
 Security test command:
 
 ```powershell
 .\mvnw.cmd test "-Dtest=SecurityConfigTest"
 ```
+
+Note: application logs may say `rateLimitFilterRegistration was not registered (disabled)`. That is expected because the filter is registered inside the Spring Security chain instead of as a separate servlet filter.
 
 ## Database
 
@@ -478,6 +496,11 @@ Current migrations:
 - `V6__allow_failed_order_status.sql`
 - `V7__create_return_exchange_requests.sql`
 - `V8__add_razorpay_refund_fields.sql`
+- `V9__add_return_exchange_refund_idempotency_key.sql`
+- `V10__create_razorpay_webhook_events.sql`
+- `V11__add_user_token_version.sql`
+- `V12__change_product_id_to_bigint.sql`
+- `V13__add_user_id_to_orders_and_wishlist_items.sql`
 
 The app uses:
 
@@ -486,6 +509,34 @@ spring.jpa.hibernate.ddl-auto=validate
 ```
 
 That means the database schema must match Flyway migrations.
+
+In Docker, PostgreSQL data is stored in the volume:
+
+```text
+springecom-postgres-data
+```
+
+Create a database SQL backup:
+
+```powershell
+docker exec springecom-postgres pg_dump -U springecom -d springecom -Fc -f /tmp/springecom-db.backup
+docker cp springecom-postgres:/tmp/springecom-db.backup .\springecom-db.backup
+```
+
+Restore a database SQL backup:
+
+```powershell
+docker cp .\springecom-db.backup springecom-postgres:/tmp/springecom-db.backup
+docker exec springecom-postgres pg_restore -U springecom -d springecom --clean --if-exists /tmp/springecom-db.backup
+```
+
+For full server migration, also back up the Docker volume:
+
+```powershell
+docker run --rm -v springecom_springecom-postgres-data:/data -v ${PWD}:/backup alpine tar czf /backup/postgres-volume-backup.tar.gz -C /data .
+```
+
+Daily client backups should use `pg_dump`. Volume backups are best for full machine migration or disaster recovery.
 
 ## Product Images
 
@@ -500,6 +551,22 @@ In Docker, product images are stored in the volume:
 ```text
 springecom-product-images
 ```
+
+For one-server deployment, keep this Docker volume and include it in server backups.
+
+Create a product image backup:
+
+```powershell
+docker run --rm -v springecom_springecom-product-images:/data -v ${PWD}:/backup alpine tar czf /backup/product-images-backup.tar.gz -C /data .
+```
+
+Restore a product image backup:
+
+```powershell
+docker run --rm -v springecom_springecom-product-images:/data -v ${PWD}:/backup alpine sh -c "cd /data && tar xzf /backup/product-images-backup.tar.gz"
+```
+
+For multi-server production, move product images to shared object storage or a shared mounted volume. Do not run multiple API servers with separate local image folders, because product image URLs can point to files that exist on only one server.
 
 ## Useful Docker Commands
 
@@ -545,6 +612,7 @@ Before production delivery:
 
 - Rotate all real secrets.
 - Use strong `DB_PASSWORD` and `JWT_SECRET`.
+- Use strong `REDIS_PASSWORD` for the production compose stack.
 - Do not commit `.env`.
 - Keep database and Redis ports private in production.
 - Configure real frontend URL in `CORS_ORIGINS`.
@@ -558,6 +626,37 @@ Before production delivery:
 - Keep schedulers on cron mode for production.
 - Confirm refund and exchange business rules with the client before enabling live operations.
 
+## Final Delivery Verification
+
+Run these commands before sending the backend to the client:
+
+```powershell
+git status
+.\mvnw.cmd clean test
+docker compose config
+docker compose -f docker-compose.prod.yml config
+docker compose up --build
+```
+
+In another PowerShell window, verify the running API:
+
+```powershell
+Invoke-WebRequest http://localhost:8080/actuator/health -UseBasicParsing
+```
+
+Expected result:
+
+```text
+StatusCode: 200
+{"status":"UP"}
+```
+
+After verification, stop the local stack:
+
+```powershell
+docker compose down
+```
+
 ## Client Delivery Checklist
 
 Before sending to the client, confirm:
@@ -568,7 +667,7 @@ Before sending to the client, confirm:
 - `.\mvnw.cmd test "-Dtest=SecurityConfigTest"` passes.
 - Docker starts with `docker compose up --build`.
 - Health check returns `UP`.
-- Swagger opens successfully.
+- Swagger opens locally/admin-only if enabled, and is disabled in production.
 - No real secrets are committed.
 - Admin login has been tested.
 - User login has been tested.
