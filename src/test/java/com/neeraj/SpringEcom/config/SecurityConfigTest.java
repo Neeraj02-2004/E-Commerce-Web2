@@ -1,30 +1,39 @@
 package com.neeraj.SpringEcom.config;
 
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
+import com.neeraj.SpringEcom.controller.OrderController;
+import com.neeraj.SpringEcom.controller.ProductController;
+import com.neeraj.SpringEcom.controller.UserController;
+import com.neeraj.SpringEcom.repo.UserRepo;
 import com.neeraj.SpringEcom.service.JwtService;
 import com.neeraj.SpringEcom.service.MyUserDetailsService;
 import com.neeraj.SpringEcom.service.OrderService;
 import com.neeraj.SpringEcom.service.ProductService;
 import com.neeraj.SpringEcom.service.UserService;
-import com.neeraj.SpringEcom.controller.OrderController;
-import com.neeraj.SpringEcom.controller.ProductController;
-import com.neeraj.SpringEcom.controller.UserController;
-import com.neeraj.SpringEcom.repo.UserRepo;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.cache.CacheManager;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.Duration;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -76,6 +85,25 @@ class SecurityConfigTest {
 
     @MockBean
     private CacheManager cacheManager;
+
+    @MockBean
+    private StringRedisTemplate stringRedisTemplate;
+
+    @SuppressWarnings("unchecked")
+    private ValueOperations<String, String> valueOperations;
+
+    @BeforeEach
+    void setUpRateLimitRedis() {
+        valueOperations = mock(ValueOperations.class);
+        Map<String, Long> counters = new ConcurrentHashMap<>();
+
+        when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(stringRedisTemplate.expire(anyString(), any(Duration.class))).thenReturn(true);
+        when(valueOperations.increment(anyString())).thenAnswer(invocation -> {
+            String key = invocation.getArgument(0);
+            return counters.merge(key, 1L, Long::sum);
+        });
+    }
 
     @Test
     void optionsRequest_shouldBePublic() throws Exception {

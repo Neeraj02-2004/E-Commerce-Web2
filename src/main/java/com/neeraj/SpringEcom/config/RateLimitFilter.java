@@ -1,14 +1,17 @@
 package com.neeraj.SpringEcom.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.bucket4j.Bandwidth;
-import io.github.bucket4j.Bucket;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.lang.Nullable;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -17,17 +20,29 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Component
 public class RateLimitFilter extends OncePerRequestFilter {
 
-    private final ObjectMapper objectMapper;
-    private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
+    private static final Logger log = LoggerFactory.getLogger(RateLimitFilter.class);
+    private static final String RATE_LIMIT_KEY_PREFIX = "rate-limit:";
 
-    public RateLimitFilter(ObjectMapper objectMapper) {
+    private final ObjectMapper objectMapper;
+    private final StringRedisTemplate stringRedisTemplate;
+    private final Set<String> trustedProxies;
+
+    public RateLimitFilter(
+            ObjectMapper objectMapper,
+            @Nullable StringRedisTemplate stringRedisTemplate,
+            @Value("${app.rate-limit.trusted-proxies:}") String trustedProxies
+    ) {
         this.objectMapper = objectMapper;
+        this.stringRedisTemplate = stringRedisTemplate;
+        this.trustedProxies = parseTrustedProxies(trustedProxies);
     }
 
     @Override
@@ -44,10 +59,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return;
         }
 
-        String key = rule.keyPrefix() + ":" + resolveClientKey(request, rule);
-        Bucket bucket = buckets.computeIfAbsent(key, ignored -> createBucket(rule));
+        String key = RATE_LIMIT_KEY_PREFIX + rule.keyPrefix() + ":" + resolveClientKey(request, rule);
 
-        if (bucket.tryConsume(1)) {
+        if (isAllowed(key, rule)) {
             filterChain.doFilter(request, response);
             return;
         }
@@ -87,6 +101,25 @@ public class RateLimitFilter extends OncePerRequestFilter {
         return null;
     }
 
+    private boolean isAllowed(String key, RateLimitRule rule) {
+        if (stringRedisTemplate == null) {
+            return true;
+        }
+
+        try {
+            Long requestCount = stringRedisTemplate.opsForValue().increment(key);
+
+            if (requestCount != null && requestCount == 1L) {
+                stringRedisTemplate.expire(key, rule.window());
+            }
+
+            return requestCount == null || requestCount <= rule.capacity();
+        } catch (RuntimeException ex) {
+            log.warn("Rate limit check failed. Allowing request. key={}", key, ex);
+            return true;
+        }
+    }
+
     private String resolveClientKey(HttpServletRequest request, RateLimitRule rule) {
         if (rule.keyType() == RateLimitKeyType.AUTHENTICATED_USER) {
             Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -103,30 +136,50 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
 
     private String clientIp(HttpServletRequest request) {
-        String forwardedFor = request.getHeader("X-Forwarded-For");
+        if (isTrustedProxy(request.getRemoteAddr())) {
+            String forwardedForIp = firstForwardedForIp(request.getHeader("X-Forwarded-For"));
 
-        if (forwardedFor != null && !forwardedFor.isBlank()) {
-            return forwardedFor.split(",")[0].trim();
-        }
+            if (forwardedForIp != null) {
+                return forwardedForIp;
+            }
 
-        String realIp = request.getHeader("X-Real-IP");
+            String realIp = request.getHeader("X-Real-IP");
 
-        if (realIp != null && !realIp.isBlank()) {
-            return realIp.trim();
+            if (realIp != null && !realIp.isBlank()) {
+                return realIp.trim();
+            }
         }
 
         return request.getRemoteAddr();
     }
 
-    private Bucket createBucket(RateLimitRule rule) {
-        Bandwidth limit = Bandwidth.builder()
-                .capacity(rule.capacity())
-                .refillIntervally(rule.capacity(), rule.window())
-                .build();
+    private String firstForwardedForIp(String forwardedFor) {
+        if (forwardedFor == null || forwardedFor.isBlank()) {
+            return null;
+        }
 
-        return Bucket.builder()
-                .addLimit(limit)
-                .build();
+        String firstIp = forwardedFor.split(",")[0].trim();
+
+        if (firstIp.isBlank()) {
+            return null;
+        }
+
+        return firstIp;
+    }
+
+    private Set<String> parseTrustedProxies(String trustedProxies) {
+        if (trustedProxies == null || trustedProxies.isBlank()) {
+            return Set.of();
+        }
+
+        return Arrays.stream(trustedProxies.split(","))
+                .map(String::trim)
+                .filter(proxy -> !proxy.isBlank())
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
+    private boolean isTrustedProxy(String remoteAddr) {
+        return remoteAddr != null && trustedProxies.contains(remoteAddr.trim());
     }
 
     private void writeTooManyRequests(HttpServletResponse response) throws IOException {

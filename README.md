@@ -1,6 +1,6 @@
-# SpringEcom Backend
+﻿# SpringEcom Backend
 
-SpringEcom is a Spring Boot ecommerce backend API with JWT authentication, Google login support, role-based access control, product management, order placement, Razorpay online payment and refund support, return/exchange request handling, wishlist, PostgreSQL database, Redis cache, Flyway migrations, Docker Compose, health checks, scheduled order automation, and Swagger API documentation.
+SpringEcom is a Spring Boot ecommerce backend API with JWT authentication, Google login support, role-based access control, product management, order placement, Razorpay online payment and refund support, return/exchange request handling, wishlist, PostgreSQL database, Redis cache, Redis-backed rate limiting, Flyway migrations, Docker Compose, health checks, scheduled order automation, and Swagger API documentation.
 
 ## Tech Stack
 
@@ -45,6 +45,7 @@ GOOGLE_CLIENT_SECRET=change-me-google-client-secret
 JWT_SECRET=change-me-base64-256-bit-secret
 
 CORS_ORIGINS=http://localhost:5173
+RATE_LIMIT_TRUSTED_PROXIES=
 
 RAZORPAY_KEY_ID=change-me-razorpay-key-id
 RAZORPAY_KEY_SECRET=change-me-razorpay-key-secret
@@ -58,6 +59,31 @@ PRODUCT_IMAGES_DIR=/app/uploads/products
 ```
 
 Important: never commit the real `.env` file to GitHub. For client delivery, send `.env.example` and ask the client/deployment owner to create their own `.env` with live secrets on the server.
+
+## Deployment Scope
+
+This backend is production-ready for a single-server Docker deployment.
+
+The production Docker Compose setup is designed for:
+
+- One API container
+- One PostgreSQL container
+- One Redis container
+- One persistent Docker volume for PostgreSQL data
+- One persistent Docker volume for product images
+
+This setup is suitable for small or medium client deployments where the backend runs on one server.
+
+For multi-server or horizontally scaled production, do not run multiple API containers with separate local product image folders. In that setup:
+
+- Move PostgreSQL to a managed database service or a dedicated database server.
+- Move product images to shared object storage.
+- Use shared/distributed rate limiting through Redis or an API gateway.
+- Keep Redis accessible only inside the private deployment network.
+- Put the API behind a trusted reverse proxy or load balancer.
+- Configure `RATE_LIMIT_TRUSTED_PROXIES` with only the trusted proxy/load-balancer IP address.
+
+Until those multi-server changes are implemented, this project should be deployed as a single-server Docker stack.
 
 ## Run With Docker
 
@@ -74,7 +100,20 @@ docker compose -f docker-compose.prod.yml up --build -d
 ```
 
 The production-style compose file exposes only the API port. PostgreSQL and Redis stay private inside Docker.
+
 It also requires `REDIS_PASSWORD` in `.env`.
+
+If the API runs behind a trusted reverse proxy, set `RATE_LIMIT_TRUSTED_PROXIES` to the proxy IP address, for example:
+
+```env
+RATE_LIMIT_TRUSTED_PROXIES=172.18.0.1
+```
+
+Leave it blank when the API is exposed directly:
+
+```env
+RATE_LIMIT_TRUSTED_PROXIES=
+```
 
 API URL:
 
@@ -93,6 +132,8 @@ Stop containers and remove volumes:
 ```powershell
 docker compose down -v
 ```
+
+Do not run `docker compose down -v` in production unless you intentionally want to remove database, Redis, and uploaded image volumes.
 
 ## Run Tests
 
@@ -114,6 +155,12 @@ Run security tests:
 .\mvnw.cmd test "-Dtest=SecurityConfigTest"
 ```
 
+Run rate-limit tests:
+
+```powershell
+.\mvnw.cmd test "-Dtest=RateLimitFilterTest"
+```
+
 Run return/exchange refund tests:
 
 ```powershell
@@ -123,10 +170,10 @@ Run return/exchange refund tests:
 Latest verified result:
 
 ```text
-124 tests passing, 0 failures, 0 errors
+126 tests run, 0 failures, 0 errors
 ```
 
-If Docker Desktop is not running, the Testcontainers integration test may be skipped automatically depending on environment.
+If Docker Desktop is not running or not accessible, the Testcontainers integration test may be skipped automatically depending on environment.
 
 ## Health Check
 
@@ -140,6 +187,18 @@ Expected response:
 
 ```json
 {"status":"UP"}
+```
+
+PowerShell check:
+
+```powershell
+Invoke-WebRequest http://localhost:8080/actuator/health -UseBasicParsing
+```
+
+Expected result:
+
+```text
+StatusCode: 200
 ```
 
 ## Swagger API Docs
@@ -336,9 +395,9 @@ When an order becomes `DELIVERED`, the backend stores `deliveredAt`.
 
 The order status scheduler runs daily at 1:00 AM.
 
-```java
+````markdown
+```text
 @Scheduled(cron = "0 0 1 * * *")
-```
 
 For local testing only, it can temporarily be changed to:
 
@@ -445,6 +504,34 @@ User-only protected endpoints:
 - `POST /api/wishlist/{productId}`
 - `DELETE /api/wishlist/{productId}`
 
+## Rate Limiting
+
+The backend includes rate limiting for sensitive endpoints.
+
+Rate-limited endpoints include:
+
+- `POST /api/login`
+- `POST /api/login/google`
+- `POST /api/register`
+- `POST /api/payments/create`
+- `GET /api/products`
+- `GET /api/products/search`
+
+Rate-limit state is stored in Redis, so limits are shared across API containers that use the same Redis instance.
+
+Important proxy rule:
+
+- By default, the app ignores `X-Forwarded-For` and `X-Real-IP`.
+- These headers are trusted only when the request comes from an IP listed in `RATE_LIMIT_TRUSTED_PROXIES`.
+- Leave `RATE_LIMIT_TRUSTED_PROXIES` blank when exposing the API directly.
+- Set `RATE_LIMIT_TRUSTED_PROXIES` only when the API is behind a trusted reverse proxy or load balancer.
+
+Example:
+
+```env
+RATE_LIMIT_TRUSTED_PROXIES=172.18.0.1
+```
+
 ## Security Rules Summary
 
 Public endpoints:
@@ -516,14 +603,74 @@ In Docker, PostgreSQL data is stored in the volume:
 springecom-postgres-data
 ```
 
-Create a database SQL backup:
+## Production Backup Automation
+
+Manual backup commands are useful, but production delivery should include a repeatable backup process.
+
+This project should include these backup and restore scripts:
+
+```text
+scripts/backup-production.ps1
+scripts/restore-production.ps1
+```
+
+The backup script should create:
+
+- PostgreSQL database backup using `pg_dump`
+- Product image volume backup using `tar`
+- Timestamped backup folder
+- Automatic cleanup of old backups based on retention days
+
+Create a production backup:
+
+```powershell
+.\scripts\backup-production.ps1
+```
+
+Create a backup with custom folder and retention:
+
+```powershell
+.\scripts\backup-production.ps1 -BackupDir "D:\springecom-backups" -RetentionDays 30
+```
+
+Restore from a backup folder:
+
+```powershell
+.\scripts\restore-production.ps1 -BackupPath "D:\springecom-backups\20260526-153000"
+```
+
+Recommended production backup policy:
+
+- Run backup at least once per day.
+- Keep at least 14 days of backups.
+- Store backups outside the application folder.
+- Copy backups to external storage or cloud storage.
+- Test restore on a staging machine before client go-live.
+- Test restore again after major database migration changes.
+
+Windows Task Scheduler example:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File "C:\path\to\SpringEcom\scripts\backup-production.ps1" -BackupDir "D:\springecom-backups" -RetentionDays 30
+```
+
+Before client delivery, perform one restore test on a staging machine and confirm:
+
+- API starts successfully.
+- Health check returns `UP`.
+- Admin login works.
+- User login works.
+- Product images load correctly.
+- Orders and payment records are visible.
+
+Create a database SQL backup manually:
 
 ```powershell
 docker exec springecom-postgres pg_dump -U springecom -d springecom -Fc -f /tmp/springecom-db.backup
 docker cp springecom-postgres:/tmp/springecom-db.backup .\springecom-db.backup
 ```
 
-Restore a database SQL backup:
+Restore a database SQL backup manually:
 
 ```powershell
 docker cp .\springecom-db.backup springecom-postgres:/tmp/springecom-db.backup
@@ -537,6 +684,8 @@ docker run --rm -v springecom_springecom-postgres-data:/data -v ${PWD}:/backup a
 ```
 
 Daily client backups should use `pg_dump`. Volume backups are best for full machine migration or disaster recovery.
+
+For multi-server production, use managed PostgreSQL or a dedicated database server instead of one local Docker PostgreSQL container.
 
 ## Product Images
 
@@ -552,21 +701,25 @@ In Docker, product images are stored in the volume:
 springecom-product-images
 ```
 
-For one-server deployment, keep this Docker volume and include it in server backups.
+Current product image storage is single-server oriented.
 
-Create a product image backup:
+For one-server deployment, Docker volume storage is acceptable and production-ready when regular backups are configured.
+
+Create a product image backup manually:
 
 ```powershell
 docker run --rm -v springecom_springecom-product-images:/data -v ${PWD}:/backup alpine tar czf /backup/product-images-backup.tar.gz -C /data .
 ```
 
-Restore a product image backup:
+Restore a product image backup manually:
 
 ```powershell
 docker run --rm -v springecom_springecom-product-images:/data -v ${PWD}:/backup alpine sh -c "cd /data && tar xzf /backup/product-images-backup.tar.gz"
 ```
 
-For multi-server production, move product images to shared object storage or a shared mounted volume. Do not run multiple API servers with separate local image folders, because product image URLs can point to files that exist on only one server.
+For multi-server production, Docker-local image storage is not enough. Move product images to shared object storage before running multiple API containers.
+
+Do not run multiple API servers with separate local image folders, because product image URLs can point to files that exist on only one server.
 
 ## Useful Docker Commands
 
@@ -594,16 +747,28 @@ Open PostgreSQL shell:
 docker exec -it springecom-postgres psql -U springecom -d springecom
 ```
 
-Open Redis shell:
+Open Redis shell in local compose:
 
 ```powershell
 docker exec -it springecom-redis redis-cli
 ```
 
-Clear Redis cache:
+Open Redis shell in production compose:
+
+```powershell
+docker exec -it springecom-redis redis-cli -a <REDIS_PASSWORD>
+```
+
+Clear Redis cache in local compose:
 
 ```powershell
 docker exec -it springecom-redis redis-cli FLUSHALL
+```
+
+Clear Redis cache in production compose:
+
+```powershell
+docker exec -it springecom-redis redis-cli -a <REDIS_PASSWORD> FLUSHALL
 ```
 
 ## Production Notes
@@ -616,6 +781,13 @@ Before production delivery:
 - Do not commit `.env`.
 - Keep database and Redis ports private in production.
 - Configure real frontend URL in `CORS_ORIGINS`.
+- Confirm with the client whether deployment is single-server or multi-server.
+- Use this Docker Compose setup for single-server production only.
+- For multi-server production, use managed PostgreSQL and shared object storage for product images.
+- Configure scheduled backups using `scripts/backup-production.ps1`.
+- Keep at least 14 days of backups, or more if the client requires it.
+- Store backups outside the application server when possible.
+- Test restore using `scripts/restore-production.ps1` before go-live.
 - Complete Razorpay KYC and payment method activation in the client's Razorpay account.
 - Use live Razorpay keys only in production environment variables.
 - Confirm Razorpay refund permission is enabled before live automatic refunds.
@@ -665,10 +837,13 @@ Before sending to the client, confirm:
 - GitHub Actions is green.
 - `.\mvnw.cmd clean test` passes.
 - `.\mvnw.cmd test "-Dtest=SecurityConfigTest"` passes.
+- `.\mvnw.cmd test "-Dtest=RateLimitFilterTest"` passes.
 - Docker starts with `docker compose up --build`.
 - Health check returns `UP`.
 - Swagger opens locally/admin-only if enabled, and is disabled in production.
 - No real secrets are committed.
+- `.env.example` is included.
+- Real `.env` is not committed.
 - Admin login has been tested.
 - User login has been tested.
 - Product image upload has been tested.
@@ -687,3 +862,10 @@ Before sending to the client, confirm:
 - Online paid return refund flow has been tested with Razorpay test mode.
 - Refund failure behavior has been tested.
 - COD manual refund behavior has been confirmed.
+- Deployment scope has been confirmed with the client.
+- If single-server deployment is selected, Docker volumes and backups are configured.
+- If multi-server deployment is required, managed PostgreSQL and shared object storage are planned before go-live.
+- Production backup script has been tested.
+- Production restore script has been tested on staging.
+- Backup retention policy has been confirmed with the client.
+- Backup storage location has been confirmed with the client.
