@@ -3,6 +3,7 @@ package com.neeraj.SpringEcom.exception;
 import com.neeraj.SpringEcom.config.RequestIdFilter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
+import org.apache.catalina.connector.ClientAbortException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.EmptyResultDataAccessException;
@@ -13,6 +14,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
@@ -190,6 +192,24 @@ public class GlobalExceptionHandler {
         log.warn("Bad request caused by illegal argument. requestId={}", requestId, e);
 
         return error(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "Invalid request", request);
+    }
+
+
+    @ExceptionHandler({
+            AsyncRequestNotUsableException.class,
+            ClientAbortException.class
+    })
+    public void handleClientAbort(
+            Exception e,
+            HttpServletRequest request
+    ) {
+        String requestId = RequestIdFilter.getRequestId(request);
+
+        log.debug(
+                "Client closed the connection before the response completed. requestId={}, path={}",
+                requestId,
+                request.getRequestURI()
+        );
     }
 
     @ExceptionHandler(ResponseStatusException.class)

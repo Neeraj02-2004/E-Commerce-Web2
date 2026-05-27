@@ -42,7 +42,7 @@ services:
       redis:
         condition: service_healthy
     environment:
-      SPRING_PROFILES_ACTIVE: prod
+      SPRING_PROFILES_ACTIVE: local
       DB_URL: jdbc:postgresql://postgres:5432/springecom
       DB_USERNAME: springecom
       REDIS_HOST: redis
