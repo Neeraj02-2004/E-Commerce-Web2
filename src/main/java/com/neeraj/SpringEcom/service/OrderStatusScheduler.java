@@ -5,11 +5,13 @@ import com.neeraj.SpringEcom.model.Order;
 import com.neeraj.SpringEcom.repo.OrderRepo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -20,8 +22,12 @@ public class OrderStatusScheduler {
 
     private static final Logger log = LoggerFactory.getLogger(OrderStatusScheduler.class);
     private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Kolkata");
+    private static final Duration LOCK_TTL = Duration.ofMinutes(30);
 
     private final OrderRepo orderRepo;
+
+    @Autowired(required = false)
+    private SchedulerLockService schedulerLockService;
 
     public OrderStatusScheduler(OrderRepo orderRepo) {
         this.orderRepo = orderRepo;
@@ -29,8 +35,21 @@ public class OrderStatusScheduler {
 
     @Scheduled(cron = "0 0 1 * * *", zone = "Asia/Kolkata")
     public void updateOrderStatuses() {
+        runWithSchedulerLock("order-status", this::processOrderStatuses);
+    }
+
+    private void processOrderStatuses() {
         markFailedOnlineOrders();
         markEligibleOrdersAsDelivered();
+    }
+
+    private void runWithSchedulerLock(String lockName, Runnable task) {
+        if (schedulerLockService == null) {
+            task.run();
+            return;
+        }
+
+        schedulerLockService.runWithLock(lockName, LOCK_TTL, task);
     }
 
     private void markFailedOnlineOrders() {
