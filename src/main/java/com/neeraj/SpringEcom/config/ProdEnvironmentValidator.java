@@ -38,8 +38,10 @@ public class ProdEnvironmentValidator implements ApplicationRunner {
         requireSecret(errors, "RAZORPAY_WEBHOOK_SECRET", "razorpay.webhook-secret");
 
         requireValue(errors, "CORS_ORIGINS", "app.cors.origins");
+
         validateJwtSecret(errors);
         validateCors(errors);
+        validateStorage(errors);
 
         if (!errors.isEmpty()) {
             throw new IllegalStateException("Invalid production configuration: " + String.join(" ", errors));
@@ -59,6 +61,21 @@ public class ProdEnvironmentValidator implements ApplicationRunner {
 
         if (corsOrigins.contains("localhost") || corsOrigins.contains("127.0.0.1")) {
             errors.add("CORS_ORIGINS must use the real frontend domain in production, not localhost.");
+        }
+    }
+
+    private void validateStorage(List<String> errors) {
+        String storageType = environment.getProperty("app.storage.type", "cloudinary").trim().toLowerCase();
+
+        if (!storageType.equals("local") && !storageType.equals("cloudinary")) {
+            errors.add("STORAGE_TYPE must be either local or cloudinary.");
+            return;
+        }
+
+        if (storageType.equals("cloudinary")) {
+            requireValue(errors, "CLOUDINARY_CLOUD_NAME", "cloudinary.cloud-name");
+            requireValue(errors, "CLOUDINARY_API_KEY", "cloudinary.api-key");
+            requireSecret(errors, "CLOUDINARY_API_SECRET", "cloudinary.api-secret");
         }
     }
 
