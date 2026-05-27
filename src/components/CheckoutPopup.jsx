@@ -52,7 +52,7 @@ const CheckoutPopup = ({
   const validateForm = () => {
     const cleanName = name.trim();
     const cleanEmail = email.trim().toLowerCase();
-    const cleanMobile = mobile.trim();
+    const cleanMobile = mobile.trim().replace(/\s+/g, "");
     const cleanAddress = address.trim();
 
     if (!cleanName || !cleanEmail || !cleanMobile || !cleanAddress) {
@@ -67,8 +67,8 @@ const CheckoutPopup = ({
       return "Enter valid email address";
     }
 
-    if (!/^[6-9]\d{9}$/.test(cleanMobile)) {
-      return "Enter valid mobile number";
+    if (!/^(?:\+91|91|0)?[6-9]\d{9}$/.test(cleanMobile)) {
+      return "Enter valid Indian mobile number";
     }
 
     if (cleanAddress.length < 10 || cleanAddress.length > 500) {
@@ -101,7 +101,7 @@ const CheckoutPopup = ({
 
     const cleanName = name.trim();
     const cleanEmail = email.trim().toLowerCase();
-    const cleanMobile = mobile.trim();
+    const cleanMobile = mobile.trim().replace(/\s+/g, "");
     const cleanAddress = address.trim();
 
     const orderData = {
@@ -211,10 +211,12 @@ const CheckoutPopup = ({
 
             <input
               className="form-control mb-2"
-              placeholder="Mobile"
-              maxLength={10}
+              placeholder="Mobile, e.g. 9876543210 or +919876543210"
+              maxLength={13}
               value={mobile}
-              onChange={(e) => setMobile(e.target.value.replace(/\D/g, ""))}
+              onChange={(e) =>
+                setMobile(e.target.value.replace(/[^\d+]/g, ""))
+              }
             />
 
             <textarea

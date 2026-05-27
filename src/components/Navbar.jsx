@@ -23,6 +23,7 @@ const Navbar = ({ onSelectCategory, onLogout }) => {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [userInfo, setUserInfo] = useState(getUserInfo());
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [popup, setPopup] = useState({
     show: false,
     message: "",
@@ -110,7 +111,7 @@ const Navbar = ({ onSelectCategory, onLogout }) => {
     localStorage.setItem("theme", newTheme);
   };
 
-  const handleLogout = () => {
+  const clearAuthAndRedirect = (message) => {
     localStorage.removeItem("token");
     localStorage.removeItem("role");
     localStorage.removeItem("username");
@@ -120,11 +121,43 @@ const Navbar = ({ onSelectCategory, onLogout }) => {
       onLogout();
     }
 
-    showPopup("Logged out successfully", "success");
+    showPopup(message, "success");
 
     setTimeout(() => {
       window.location.href = "/login";
     }, 900);
+  };
+
+  const handleLogout = async () => {
+    if (isLoggingOut) {
+      return;
+    }
+
+    setIsLoggingOut(true);
+
+    try {
+      await axios.post(`${API_ORIGIN}/api/logout`);
+      clearAuthAndRedirect("Logged out successfully");
+    } catch (error) {
+      console.error("Logout failed:", error);
+      clearAuthAndRedirect("Logged out successfully");
+    }
+  };
+
+  const handleLogoutAll = async () => {
+    if (isLoggingOut) {
+      return;
+    }
+
+    setIsLoggingOut(true);
+
+    try {
+      await axios.post(`${API_ORIGIN}/api/logout-all`);
+      clearAuthAndRedirect("Logged out from all devices");
+    } catch (error) {
+      console.error("Logout all failed:", error);
+      clearAuthAndRedirect("Logged out from all devices");
+    }
   };
 
   const categories = [
@@ -330,9 +363,19 @@ const Navbar = ({ onSelectCategory, onLogout }) => {
                     <button
                       type="button"
                       onClick={handleLogout}
-                      className="btn btn-sm btn-danger w-100"
+                      className="btn btn-sm btn-danger w-100 mb-2"
+                      disabled={isLoggingOut}
                     >
-                      Logout
+                      {isLoggingOut ? "Logging out..." : "Logout"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleLogoutAll}
+                      className="btn btn-sm btn-outline-danger w-100"
+                      disabled={isLoggingOut}
+                    >
+                      Sign out everywhere
                     </button>
                   </div>
                 </div>

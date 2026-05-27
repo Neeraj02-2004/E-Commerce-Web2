@@ -31,18 +31,10 @@ const UpdateProduct = () => {
   const isAdmin = localStorage.getItem("role") === "ADMIN";
 
   const showPopup = (message, type = "success") => {
-    setPopup({
-      show: true,
-      message,
-      type,
-    });
+    setPopup({ show: true, message, type });
 
     setTimeout(() => {
-      setPopup({
-        show: false,
-        message: "",
-        type: "success",
-      });
+      setPopup({ show: false, message: "", type: "success" });
     }, 2500);
   };
 
@@ -59,11 +51,9 @@ const UpdateProduct = () => {
 
     const fetchProduct = async () => {
       try {
-        const response = await axios.get(
-          `${API_ORIGIN}/api/product/${id}`
-        );
-
+        const response = await axios.get(`${API_ORIGIN}/api/product/${id}`);
         const data = response.data;
+
         setProduct(data);
 
         setUpdateProduct({
@@ -79,14 +69,15 @@ const UpdateProduct = () => {
         });
 
         if (data.imageUrl) {
-          setExistingImageUrl(`${API_ORIGIN}${data.imageUrl}`);
+          if (data.imageUrl.startsWith("http")) {
+            setExistingImageUrl(data.imageUrl);
+          } else {
+            setExistingImageUrl(`${API_ORIGIN}${data.imageUrl}`);
+          }
         }
       } catch (error) {
         console.error("Error fetching product:", error);
-        showPopup(
-          error.response?.data?.message || "Failed to load product",
-          "error"
-        );
+        showPopup(error.response?.data?.message || "Failed to load product", "error");
       }
     };
 
@@ -116,15 +107,11 @@ const UpdateProduct = () => {
     }
 
     try {
-      await axios.put(
-        `${API_ORIGIN}/api/admin/product/${id}`,
-        formData,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      await axios.put(`${API_ORIGIN}/api/admin/product/${id}`, formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       showPopup("Product updated successfully", "success");
 
@@ -133,10 +120,7 @@ const UpdateProduct = () => {
       }, 1200);
     } catch (error) {
       console.error("Error updating product:", error);
-      showPopup(
-        error.response?.data?.message || "Failed to update product",
-        "error"
-      );
+      showPopup(error.response?.data?.message || "Failed to update product", "error");
     }
   };
 
@@ -158,9 +142,7 @@ const UpdateProduct = () => {
       <>
         {popup.show && (
           <div style={popupStyle(popup.type)}>
-            <div style={popupIconStyle}>
-              {popup.type === "success" ? "✓" : "!"}
-            </div>
+            <div style={popupIconStyle}>{popup.type === "success" ? "✓" : "!"}</div>
             <div>{popup.message}</div>
           </div>
         )}
@@ -168,17 +150,13 @@ const UpdateProduct = () => {
     );
   }
 
-  const previewImageUrl = image
-    ? URL.createObjectURL(image)
-    : existingImageUrl;
+  const previewImageUrl = image ? URL.createObjectURL(image) : existingImageUrl;
 
   return (
     <div className="update-product-container">
       {popup.show && (
         <div style={popupStyle(popup.type)}>
-          <div style={popupIconStyle}>
-            {popup.type === "success" ? "✓" : "!"}
-          </div>
+          <div style={popupIconStyle}>{popup.type === "success" ? "✓" : "!"}</div>
           <div>{popup.message}</div>
         </div>
       )}
@@ -291,7 +269,20 @@ const UpdateProduct = () => {
             />
           </div>
 
-          <div className="col-md-8">
+          <div className="col-md-4">
+            <label className="form-label">
+              <h6>Release Date</h6>
+            </label>
+            <input
+              type="date"
+              className="form-control"
+              value={updateProduct.releaseDate || ""}
+              onChange={handleChange}
+              name="releaseDate"
+            />
+          </div>
+
+          <div className="col-md-4">
             <label className="form-label">
               <h6>Image</h6>
             </label>

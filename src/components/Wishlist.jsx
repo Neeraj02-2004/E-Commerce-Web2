@@ -21,18 +21,10 @@ const Wishlist = () => {
   }, []);
 
   const showPopup = (message, type = "success") => {
-    setPopup({
-      show: true,
-      message,
-      type,
-    });
+    setPopup({ show: true, message, type });
 
     setTimeout(() => {
-      setPopup({
-        show: false,
-        message: "",
-        type: "success",
-      });
+      setPopup({ show: false, message: "", type: "success" });
     }, 2500);
   };
 
@@ -59,9 +51,7 @@ const Wishlist = () => {
   const handleRemove = async (productId) => {
     try {
       await removeFromWishlist(productId);
-
       const removedItem = wishlist.find((item) => item.id === productId);
-
       setWishlist((prev) => prev.filter((item) => item.id !== productId));
 
       showPopup(
@@ -78,6 +68,10 @@ const Wishlist = () => {
   const getImageUrl = (item) => {
     if (!item.imageUrl) {
       return "/placeholder-image.png";
+    }
+
+    if (item.imageUrl.startsWith("http")) {
+      return item.imageUrl;
     }
 
     return `${API_ORIGIN}${item.imageUrl}`;

@@ -45,7 +45,11 @@ const Product = () => {
         setProduct(response.data);
 
         if (response.data.imageUrl) {
-          setImageUrl(`${API_ORIGIN}${response.data.imageUrl}`);
+          if (response.data.imageUrl.startsWith("http")) {
+            setImageUrl(response.data.imageUrl);
+          } else {
+            setImageUrl(`${API_ORIGIN}${response.data.imageUrl}`);
+          }
         }
       } catch (error) {
         console.error("Error fetching product:", error);
@@ -276,7 +280,11 @@ const Product = () => {
                 <h6>
                   Listed :{" "}
                   <span>
-                    <i>{new Date(product.releaseDate).toLocaleDateString()}</i>
+                    <i>
+                      {product.releaseDate
+                        ? new Date(product.releaseDate).toLocaleDateString()
+                        : "Not set"}
+                    </i>
                   </span>
                 </h6>
               </div>
@@ -328,7 +336,9 @@ const Product = () => {
                     color: "white",
                     border: "none",
                     borderRadius: "5px",
-                    cursor: product.productAvailable ? "pointer" : "not-allowed",
+                    cursor: product.productAvailable
+                      ? "pointer"
+                      : "not-allowed",
                     marginBottom: "1rem",
                   }}
                 >

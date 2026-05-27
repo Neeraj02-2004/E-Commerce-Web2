@@ -1,11 +1,16 @@
-import { useContext, useState, useEffect } from "react";
+import { useContext, useEffect, useState } from "react";
 import AppContext from "../Context/Context";
 import axios from "../axios";
 import CheckoutPopup from "./CheckoutPopup";
 import { Button } from "react-bootstrap";
 
 const Cart = () => {
-  const { cart, removeFromCart, clearCart } = useContext(AppContext);
+  const {
+    cart,
+    removeFromCart,
+    clearCart,
+    updateCartItemQuantity,
+  } = useContext(AppContext);
 
   const [cartItems, setCartItems] = useState([]);
   const [totalPrice, setTotalPrice] = useState(0);
@@ -17,18 +22,10 @@ const Cart = () => {
   });
 
   const showPopup = (message, type = "success") => {
-    setPopup({
-      show: true,
-      message,
-      type,
-    });
+    setPopup({ show: true, message, type });
 
     setTimeout(() => {
-      setPopup({
-        show: false,
-        message: "",
-        type: "success",
-      });
+      setPopup({ show: false, message: "", type: "success" });
     }, 2500);
   };
 
@@ -43,7 +40,9 @@ const Cart = () => {
     const updatedCart = cart.map((item) => ({
       ...item,
       imageUrl: item.imageUrl
-        ? `${API_ORIGIN}${item.imageUrl}`
+        ? item.imageUrl.startsWith("http")
+          ? item.imageUrl
+          : `${API_ORIGIN}${item.imageUrl}`
         : "/placeholder-image.png",
     }));
 
@@ -52,7 +51,7 @@ const Cart = () => {
 
   useEffect(() => {
     const total = cartItems.reduce(
-      (acc, item) => acc + item.price * item.quantity,
+      (acc, item) => acc + Number(item.price) * Number(item.quantity),
       0
     );
 
@@ -60,33 +59,34 @@ const Cart = () => {
   }, [cartItems]);
 
   const handleIncreaseQuantity = (itemId) => {
-    const updated = cartItems.map((item) => {
-      if (item.id === itemId) {
-        if (item.quantity < item.stockQuantity) {
-          return { ...item, quantity: item.quantity + 1 };
-        }
+    const currentItem = cartItems.find(
+      (item) => Number(item.id) === Number(itemId)
+    );
 
-        showPopup("Cannot add more than available stock", "error");
-      }
+    if (!currentItem) return;
 
-      return item;
-    });
+    if (currentItem.quantity >= currentItem.stockQuantity) {
+      showPopup("Cannot add more than available stock", "error");
+      return;
+    }
 
-    setCartItems(updated);
+    updateCartItemQuantity(itemId, currentItem.quantity + 1);
   };
 
   const handleDecreaseQuantity = (itemId) => {
-    const updated = cartItems.map((item) =>
-      item.id === itemId
-        ? { ...item, quantity: Math.max(item.quantity - 1, 1) }
-        : item
+    const currentItem = cartItems.find(
+      (item) => Number(item.id) === Number(itemId)
     );
 
-    setCartItems(updated);
+    if (!currentItem) return;
+
+    updateCartItemQuantity(itemId, Math.max(currentItem.quantity - 1, 1));
   };
 
   const handleRemoveFromCart = (itemId) => {
-    const removedItem = cartItems.find((item) => item.id === itemId);
+    const removedItem = cartItems.find(
+      (item) => Number(item.id) === Number(itemId)
+    );
 
     removeFromCart(itemId);
 
@@ -109,7 +109,7 @@ const Cart = () => {
       {popup.show && (
         <div style={popupStyle(popup.type)}>
           <div style={popupIconStyle}>
-            {popup.type === "success" ? "✓" : "!"}
+            {popup.type === "success" ? "OK" : "!"}
           </div>
           <div>{popup.message}</div>
         </div>
@@ -149,6 +149,7 @@ const Cart = () => {
                   <div className="quantity">
                     <button
                       className="plus-btn"
+                      type="button"
                       onClick={() => handleIncreaseQuantity(item.id)}
                     >
                       <i className="bi bi-plus-square-fill"></i>
@@ -158,6 +159,7 @@ const Cart = () => {
 
                     <button
                       className="minus-btn"
+                      type="button"
                       onClick={() => handleDecreaseQuantity(item.id)}
                     >
                       <i className="bi bi-dash-square-fill"></i>
@@ -165,11 +167,12 @@ const Cart = () => {
                   </div>
 
                   <div className="total-price">
-                    ₹{item.price * item.quantity}
+                    ₹{Number(item.price) * Number(item.quantity)}
                   </div>
 
                   <button
                     className="remove-btn"
+                    type="button"
                     onClick={() => handleRemoveFromCart(item.id)}
                   >
                     <i className="bi bi-trash3-fill"></i>
@@ -233,6 +236,7 @@ const popupIconStyle = {
   justifyContent: "center",
   fontWeight: "bold",
   flexShrink: 0,
+  fontSize: "12px",
 };
 
 export default Cart;
