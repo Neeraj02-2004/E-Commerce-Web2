@@ -1,6 +1,7 @@
 param(
     [string]$BackupDir = "backups",
-    [int]$RetentionDays = 14
+    [int]$RetentionDays = 14,
+    [switch]$IncludeLocalImageVolume
 )
 
 $ErrorActionPreference = "Stop"
@@ -20,12 +21,19 @@ docker exec springecom-postgres pg_dump -U springecom -d springecom -Fc -f "/tmp
 docker cp "springecom-postgres:/tmp/$dbBackupFile" (Join-Path $backupRoot $dbBackupFile)
 docker exec springecom-postgres rm -f "/tmp/$dbBackupFile"
 
-Write-Host "Creating product image volume backup..."
-docker run --rm `
-    -v springecom_springecom-product-images:/data `
-    -v "${PWD}/${backupRoot}:/backup" `
-    alpine `
-    tar czf "/backup/$imageBackupFile" -C /data .
+if ($IncludeLocalImageVolume) {
+    Write-Host "Creating local product image volume backup..."
+    $resolvedBackupRoot = (Resolve-Path $backupRoot).Path
+
+    docker run --rm `
+        -v springecom_springecom-product-images:/data `
+        -v "${resolvedBackupRoot}:/backup" `
+        alpine `
+        tar czf "/backup/$imageBackupFile" -C /data .
+} else {
+    Write-Host "Skipping local product image volume backup."
+    Write-Host "Production product images are stored in Cloudinary. Back up Cloudinary assets according to the client's Cloudinary/export policy."
+}
 
 Write-Host "Removing backups older than $RetentionDays days..."
 if (Test-Path $BackupDir) {
