@@ -37,6 +37,10 @@ jobs:
       - name: Make Maven wrapper executable
         run: chmod +x mvnw
 
+      - name: Check for committed secrets
+        shell: pwsh
+        run: ./scripts/check-no-secrets.ps1
+
       - name: Run clean tests
         env:
           DB_PASSWORD: test-password
