@@ -1,6 +1,6 @@
 ﻿# SpringEcom Backend
 
-SpringEcom is a Spring Boot ecommerce backend API with JWT authentication, Google login support, role-based access control, product management, order placement, Razorpay online payment and refund support, return/exchange request handling, wishlist, PostgreSQL database, Redis cache, Redis-backed rate limiting, Flyway migrations, Docker Compose, health checks, scheduled order automation, and Swagger API documentation.
+SpringEcom is a Spring Boot ecommerce backend API with JWT authentication, Google login, role-based access control, product management, order placement, Razorpay payment/refund support, return/exchange handling, wishlist, PostgreSQL, Redis cache, Redis-backed rate limiting, Redis scheduler locks, Flyway migrations, Docker Compose, health checks, Cloudinary product image storage, scheduled automation, and Swagger API documentation.
 
 ## Tech Stack
 
@@ -11,17 +11,18 @@ SpringEcom is a Spring Boot ecommerce backend API with JWT authentication, Googl
 - Redis
 - Flyway
 - Docker Compose
+- Cloudinary
+- Razorpay
 - Swagger / OpenAPI
 - Maven Wrapper
 - Testcontainers
-- Razorpay Payment Gateway
 
 ## Requirements
 
 For local development:
 
 - Java 21+
-- Maven wrapper included in this project
+- Maven wrapper included
 - PostgreSQL
 - Redis
 - Docker Desktop optional for normal local run
@@ -43,6 +44,7 @@ GOOGLE_CLIENT_ID=change-me-google-client-id
 GOOGLE_CLIENT_SECRET=change-me-google-client-secret
 
 JWT_SECRET=change-me-base64-256-bit-secret
+JWT_EXPIRATION_MS=3600000
 
 CORS_ORIGINS=http://localhost:5173
 RATE_LIMIT_TRUSTED_PROXIES=
@@ -52,17 +54,28 @@ RAZORPAY_KEY_SECRET=change-me-razorpay-key-secret
 RAZORPAY_WEBHOOK_SECRET=change-me-razorpay-webhook-secret
 RAZORPAY_CURRENCY=INR
 
-JWT_EXPIRATION_MS=3600000
 REDIS_PASSWORD=change-me-strong-redis-password
 
+# Image storage: local or cloudinary
+STORAGE_TYPE=local
 PRODUCT_IMAGES_DIR=/app/uploads/products
+
+CLOUDINARY_CLOUD_NAME=change-me-cloudinary-cloud-name
+CLOUDINARY_API_KEY=change-me-cloudinary-api-key
+CLOUDINARY_API_SECRET=change-me-cloudinary-api-secret
+CLOUDINARY_FOLDER=springecom/products
 ```
 
-Important: never commit the real `.env` file to GitHub. For client delivery, send `.env.example` and ask the client/deployment owner to create their own `.env` with live secrets on the server.
+Important:
+
+- Never commit the real `.env` file.
+- Never commit real Cloudinary, Razorpay, Google, database, Redis, or JWT secrets.
+- For production, set `STORAGE_TYPE=cloudinary`.
+- If any real secret was exposed during development, rotate it before production.
 
 ## Deployment Scope
 
-This backend is production-ready for a single-server Docker deployment.
+This backend is production-ready for single-server Docker deployment and prepared for multi-server API scaling when shared infrastructure is used.
 
 The production Docker Compose setup is designed for:
 
@@ -70,24 +83,23 @@ The production Docker Compose setup is designed for:
 - One PostgreSQL container
 - One Redis container
 - One persistent Docker volume for PostgreSQL data
-- One persistent Docker volume for product images
+- Redis-backed cache, rate limiting, and scheduler locking
+- Cloudinary-backed product image storage
 
-This setup is suitable for small or medium client deployments where the backend runs on one server.
+For multi-server or horizontally scaled production:
 
-For multi-server or horizontally scaled production, do not run multiple API containers with separate local product image folders. In that setup:
-
-- Move PostgreSQL to a managed database service or a dedicated database server.
-- Move product images to shared object storage.
-- Use shared/distributed rate limiting through Redis or an API gateway.
-- Keep Redis accessible only inside the private deployment network.
+- Use managed PostgreSQL or a dedicated database server.
+- Use shared Redis accessible from all API servers inside a private network.
+- Use Cloudinary for product image storage.
 - Put the API behind a trusted reverse proxy or load balancer.
-- Configure `RATE_LIMIT_TRUSTED_PROXIES` with only the trusted proxy/load-balancer IP address.
+- Configure `RATE_LIMIT_TRUSTED_PROXIES` with only trusted proxy/load-balancer IP addresses.
+- Keep all database and Redis ports private.
 
-Until those multi-server changes are implemented, this project should be deployed as a single-server Docker stack.
+Do not run multiple API containers with separate local product image folders.
 
 ## Run With Docker
 
-Start the full backend stack:
+Start the local backend stack:
 
 ```powershell
 docker compose up --build
@@ -99,21 +111,9 @@ Start the production-style stack:
 docker compose -f docker-compose.prod.yml up --build -d
 ```
 
-The production-style compose file exposes only the API port. PostgreSQL and Redis stay private inside Docker.
+The production compose file exposes only the API port. PostgreSQL and Redis stay private inside Docker.
 
-It also requires `REDIS_PASSWORD` in `.env`.
-
-If the API runs behind a trusted reverse proxy, set `RATE_LIMIT_TRUSTED_PROXIES` to the proxy IP address, for example:
-
-```env
-RATE_LIMIT_TRUSTED_PROXIES=172.18.0.1
-```
-
-Leave it blank when the API is exposed directly:
-
-```env
-RATE_LIMIT_TRUSTED_PROXIES=
-```
+Production compose requires `REDIS_PASSWORD` and Cloudinary values in `.env`.
 
 API URL:
 
@@ -127,13 +127,11 @@ Stop containers:
 docker compose down
 ```
 
-Stop containers and remove volumes:
+Do not run this in production unless you intentionally want to remove database and Redis volumes:
 
 ```powershell
 docker compose down -v
 ```
-
-Do not run `docker compose down -v` in production unless you intentionally want to remove database, Redis, and uploaded image volumes.
 
 ## Run Tests
 
@@ -149,31 +147,20 @@ Run full clean test:
 .\mvnw.cmd clean test
 ```
 
-Run security tests:
+Recommended Windows clean test command for this project:
 
 ```powershell
-.\mvnw.cmd test "-Dtest=SecurityConfigTest"
-```
-
-Run rate-limit tests:
-
-```powershell
-.\mvnw.cmd test "-Dtest=RateLimitFilterTest"
-```
-
-Run return/exchange refund tests:
-
-```powershell
-.\mvnw.cmd test "-Dtest=ReturnExchangeServiceTest,ReturnExchangeSchedulerTest"
+.\scripts\run-clean-tests.ps1
 ```
 
 Latest verified result:
 
 ```text
-126 tests run, 0 failures, 0 errors
+Tests run: 126, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
 ```
 
-If Docker Desktop is not running or not accessible, the Testcontainers integration test may be skipped automatically depending on environment.
+If Docker Desktop is not running or not accessible, Testcontainers integration tests may fail or skip depending on environment.
 
 ## Health Check
 
@@ -181,12 +168,6 @@ Health endpoint:
 
 ```text
 http://localhost:8080/actuator/health
-```
-
-Expected response:
-
-```json
-{"status":"UP"}
 ```
 
 PowerShell check:
@@ -199,6 +180,7 @@ Expected result:
 
 ```text
 StatusCode: 200
+{"status":"UP"}
 ```
 
 ## Swagger API Docs
@@ -225,7 +207,7 @@ Public endpoints:
 - `POST /api/login`
 - `POST /api/login/google`
 
-Use the JWT token in protected requests:
+Use JWT token in protected requests:
 
 ```text
 Authorization: Bearer <token>
@@ -240,19 +222,12 @@ Supported roles:
 
 By default, registered users get the `USER` role.
 
-Role responsibilities:
+Role rules:
 
-| Role | Purpose |
-|---|---|
-| `USER` | Customer shopping, orders, wishlist, payments, return/exchange requests |
-| `ADMIN` | Product management and return/exchange administration |
-
-Important role rule:
-
-- `ADMIN` users are blocked from customer shopping APIs.
-- `ADMIN` users cannot place orders, pay for orders, use wishlist, cancel customer orders, or create user return/exchange requests.
-- `ADMIN` users can manage products and admin return/exchange decisions.
-- `USER` users cannot access admin product or admin return/exchange APIs.
+- `USER` can shop, place orders, use wishlist, make payments, and request return/exchange.
+- `ADMIN` can manage products and return/exchange administration.
+- `ADMIN` cannot place orders, pay, use wishlist, cancel customer orders, or create user return/exchange requests.
+- `USER` cannot access admin APIs.
 
 Make a user admin in Docker PostgreSQL:
 
@@ -288,11 +263,48 @@ Allowed image types:
 - PNG
 - WEBP
 
-Maximum product image size:
+Maximum image size:
 
 ```text
 5MB
 ```
+
+## Product Images
+
+Product image storage supports two modes.
+
+Local mode:
+
+```env
+STORAGE_TYPE=local
+PRODUCT_IMAGES_DIR=/app/uploads/products
+```
+
+Local mode stores files under:
+
+```text
+uploads/products
+```
+
+Cloudinary mode:
+
+```env
+STORAGE_TYPE=cloudinary
+CLOUDINARY_CLOUD_NAME=change-me-cloudinary-cloud-name
+CLOUDINARY_API_KEY=change-me-cloudinary-api-key
+CLOUDINARY_API_SECRET=change-me-cloudinary-api-secret
+CLOUDINARY_FOLDER=springecom/products
+```
+
+In Cloudinary mode, product image URLs are stored as Cloudinary HTTPS URLs, so multiple API servers can serve the same product images without sharing a local upload folder.
+
+The production Docker Compose file sets:
+
+```env
+STORAGE_TYPE=cloudinary
+```
+
+Before production delivery, rotate any exposed Cloudinary secret and put real Cloudinary values only in the server `.env` file.
 
 ## Order APIs
 
@@ -335,49 +347,31 @@ Online payment flow:
 3. Frontend calls `/api/payments/create`.
 4. Backend creates a Razorpay order.
 5. Frontend opens Razorpay Checkout.
-6. After successful payment, frontend calls `/api/payments/verify`.
+6. Frontend calls `/api/payments/verify`.
 7. Backend verifies Razorpay signature.
 8. Backend updates payment status to `PAID`.
-9. Backend stores Razorpay payment id and paid time.
-
-Payment statuses:
-
-- `PENDING`
-- `PAID`
-- `FAILED`
 
 For client/live deployment, Razorpay KYC and payment method activation must be completed in the client's Razorpay business account.
 
 ## Razorpay Refund Support
 
-The backend supports real Razorpay refunds for online paid return orders.
+The backend supports Razorpay refunds for online paid return orders.
 
 Online return refund flow:
 
 1. User creates a return request for a delivered order.
 2. Admin approves the return request.
 3. Refund status becomes `REFUND_PROCESSING`.
-4. After 6 days, the return/exchange scheduler processes the approved return.
-5. Backend calls Razorpay refund API using the stored Razorpay payment id.
-6. If Razorpay refund succeeds:
-   - request status becomes `COMPLETED`
-   - refund status becomes `REFUNDED`
-   - gateway refund id is stored
-   - refund amount is stored
-   - refund processed time is stored
-7. If Razorpay refund fails:
-   - request status remains `APPROVED`
-   - refund status becomes `REFUND_FAILED`
-   - refund failure reason is stored
-   - scheduler can retry on the next run
+4. After 6 days, scheduler processes the approved return.
+5. Backend calls Razorpay refund API.
+6. If refund succeeds, request becomes `COMPLETED` and refund status becomes `REFUNDED`.
+7. If refund fails, request remains retryable and refund status becomes `REFUND_FAILED`.
 
 COD refund flow:
 
 - Cash on Delivery refunds cannot be processed through Razorpay.
 - COD return approval sets refund status to `MANUAL_REFUND_REQUIRED`.
 - Admin/business must process COD refunds manually.
-
-Important: online paid returns use Razorpay refund API when the approved return is completed. COD refunds are marked as `MANUAL_REFUND_REQUIRED` and must be handled manually by admin/business.
 
 ## Order Status Automation
 
@@ -391,21 +385,13 @@ Rules:
 - `ONLINE` + payment `FAILED` = `FAILED`
 - `CANCELLED` orders are never changed by the scheduler
 
-When an order becomes `DELIVERED`, the backend stores `deliveredAt`.
-
-The order status scheduler runs daily at 1:00 AM.
-
-````markdown
-```text
-@Scheduled(cron = "0 0 1 * * *")
-
-For local testing only, it can temporarily be changed to:
+The order status scheduler runs daily at 1:00 AM Asia/Kolkata:
 
 ```java
-@Scheduled(fixedRate = 60000)
+@Scheduled(cron = "0 0 1 * * *", zone = "Asia/Kolkata")
 ```
 
-This runs every 60 seconds.
+Schedulers use Redis locks so only one API server processes the job when multiple API servers are running.
 
 ## Return / Exchange APIs
 
@@ -448,53 +434,20 @@ Return/exchange rules:
 - Only `DELIVERED` orders are eligible.
 - Request window is 7 days after delivery.
 - User must provide a reason between 10 and 1000 characters.
-- A user cannot create multiple active return/exchange requests for the same order.
+- User cannot create multiple active return/exchange requests for the same order.
 - Admin can approve, reject, or complete a request.
-- For online paid returns, approval sets refund status to `REFUND_PROCESSING`.
-- For Cash on Delivery returns, approval sets refund status to `MANUAL_REFUND_REQUIRED`.
-- For online paid returns, completion calls Razorpay refund API.
-- For successful online refunds, refund status becomes `REFUNDED`.
-- For failed online refunds, refund status becomes `REFUND_FAILED`.
-- For approved exchanges, completion marks the request as `COMPLETED`.
+- Online paid returns use Razorpay refund API.
+- COD returns require manual refund.
 
 Automatic return/exchange completion:
 
 - Approved return/exchange requests are completed automatically after 6 days.
-- For approved online paid returns, backend attempts Razorpay refund.
-- For approved COD returns, backend marks the request completed and keeps manual refund responsibility with admin/business.
-- For approved exchanges, request status becomes `COMPLETED`.
-- The scheduler runs daily at 1:30 AM.
+- Scheduler runs daily at 1:30 AM Asia/Kolkata.
+- Scheduler uses Redis lock for multi-server safety.
 
 ```java
-@Scheduled(cron = "0 30 1 * * *")
+@Scheduled(cron = "0 30 1 * * *", zone = "Asia/Kolkata")
 ```
-
-Refund and exchange timing:
-
-```text
-After admin approval, return refunds and exchange requests are automatically completed after 6 days.
-```
-
-## Return / Exchange Response Fields
-
-Return/exchange response includes:
-
-- `requestId`
-- `orderId`
-- `userEmail`
-- `requestType`
-- `reason`
-- `status`
-- `refundStatus`
-- `adminNote`
-- `gatewayRefundId`
-- `refundAmount`
-- `approvedAt`
-- `completedAt`
-- `refundProcessedAt`
-- `refundFailureReason`
-- `createdAt`
-- `updatedAt`
 
 ## Wishlist APIs
 
@@ -506,8 +459,6 @@ User-only protected endpoints:
 
 ## Rate Limiting
 
-The backend includes rate limiting for sensitive endpoints.
-
 Rate-limited endpoints include:
 
 - `POST /api/login`
@@ -517,19 +468,23 @@ Rate-limited endpoints include:
 - `GET /api/products`
 - `GET /api/products/search`
 
-Rate-limit state is stored in Redis, so limits are shared across API containers that use the same Redis instance.
+Rate-limit state is stored in Redis, so limits are shared across API containers using the same Redis.
 
-Important proxy rule:
+Proxy rule:
 
 - By default, the app ignores `X-Forwarded-For` and `X-Real-IP`.
-- These headers are trusted only when the request comes from an IP listed in `RATE_LIMIT_TRUSTED_PROXIES`.
-- Leave `RATE_LIMIT_TRUSTED_PROXIES` blank when exposing the API directly.
-- Set `RATE_LIMIT_TRUSTED_PROXIES` only when the API is behind a trusted reverse proxy or load balancer.
+- These headers are trusted only when request comes from an IP listed in `RATE_LIMIT_TRUSTED_PROXIES`.
 
 Example:
 
 ```env
 RATE_LIMIT_TRUSTED_PROXIES=172.18.0.1
+```
+
+Leave blank when API is exposed directly:
+
+```env
+RATE_LIMIT_TRUSTED_PROXIES=
 ```
 
 ## Security Rules Summary
@@ -563,7 +518,11 @@ Security test command:
 .\mvnw.cmd test "-Dtest=SecurityConfigTest"
 ```
 
-Note: application logs may say `rateLimitFilterRegistration was not registered (disabled)`. That is expected because the filter is registered inside the Spring Security chain instead of as a separate servlet filter.
+Rate limit test command:
+
+```powershell
+.\mvnw.cmd test "-Dtest=RateLimitFilterTest"
+```
 
 ## Database
 
@@ -588,6 +547,7 @@ Current migrations:
 - `V11__add_user_token_version.sql`
 - `V12__change_product_id_to_bigint.sql`
 - `V13__add_user_id_to_orders_and_wishlist_items.sql`
+- `V14__add_product_image_public_id.sql`
 
 The app uses:
 
@@ -595,45 +555,30 @@ The app uses:
 spring.jpa.hibernate.ddl-auto=validate
 ```
 
-That means the database schema must match Flyway migrations.
-
-In Docker, PostgreSQL data is stored in the volume:
-
-```text
-springecom-postgres-data
-```
+Database schema must match Flyway migrations.
 
 ## Production Backup Automation
 
-Manual backup commands are useful, but production delivery should include a repeatable backup process.
-
-This project should include these backup and restore scripts:
+Backup scripts:
 
 ```text
 scripts/backup-production.ps1
 scripts/restore-production.ps1
 ```
 
-The backup script should create:
-
-- PostgreSQL database backup using `pg_dump`
-- Product image volume backup using `tar`
-- Timestamped backup folder
-- Automatic cleanup of old backups based on retention days
-
-Create a production backup:
+Create backup:
 
 ```powershell
 .\scripts\backup-production.ps1
 ```
 
-Create a backup with custom folder and retention:
+Create backup with custom folder and retention:
 
 ```powershell
 .\scripts\backup-production.ps1 -BackupDir "D:\springecom-backups" -RetentionDays 30
 ```
 
-Restore from a backup folder:
+Restore from backup folder:
 
 ```powershell
 .\scripts\restore-production.ps1 -BackupPath "D:\springecom-backups\20260526-153000"
@@ -644,82 +589,11 @@ Recommended production backup policy:
 - Run backup at least once per day.
 - Keep at least 14 days of backups.
 - Store backups outside the application folder.
-- Copy backups to external storage or cloud storage.
-- Test restore on a staging machine before client go-live.
+- Copy backups to external/cloud storage.
+- Test restore on staging before go-live.
 - Test restore again after major database migration changes.
 
-Windows Task Scheduler example:
-
-```powershell
-powershell.exe -ExecutionPolicy Bypass -File "C:\path\to\SpringEcom\scripts\backup-production.ps1" -BackupDir "D:\springecom-backups" -RetentionDays 30
-```
-
-Before client delivery, perform one restore test on a staging machine and confirm:
-
-- API starts successfully.
-- Health check returns `UP`.
-- Admin login works.
-- User login works.
-- Product images load correctly.
-- Orders and payment records are visible.
-
-Create a database SQL backup manually:
-
-```powershell
-docker exec springecom-postgres pg_dump -U springecom -d springecom -Fc -f /tmp/springecom-db.backup
-docker cp springecom-postgres:/tmp/springecom-db.backup .\springecom-db.backup
-```
-
-Restore a database SQL backup manually:
-
-```powershell
-docker cp .\springecom-db.backup springecom-postgres:/tmp/springecom-db.backup
-docker exec springecom-postgres pg_restore -U springecom -d springecom --clean --if-exists /tmp/springecom-db.backup
-```
-
-For full server migration, also back up the Docker volume:
-
-```powershell
-docker run --rm -v springecom_springecom-postgres-data:/data -v ${PWD}:/backup alpine tar czf /backup/postgres-volume-backup.tar.gz -C /data .
-```
-
-Daily client backups should use `pg_dump`. Volume backups are best for full machine migration or disaster recovery.
-
-For multi-server production, use managed PostgreSQL or a dedicated database server instead of one local Docker PostgreSQL container.
-
-## Product Images
-
-Uploaded product images are stored in:
-
-```text
-uploads/products
-```
-
-In Docker, product images are stored in the volume:
-
-```text
-springecom-product-images
-```
-
-Current product image storage is single-server oriented.
-
-For one-server deployment, Docker volume storage is acceptable and production-ready when regular backups are configured.
-
-Create a product image backup manually:
-
-```powershell
-docker run --rm -v springecom_springecom-product-images:/data -v ${PWD}:/backup alpine tar czf /backup/product-images-backup.tar.gz -C /data .
-```
-
-Restore a product image backup manually:
-
-```powershell
-docker run --rm -v springecom_springecom-product-images:/data -v ${PWD}:/backup alpine sh -c "cd /data && tar xzf /backup/product-images-backup.tar.gz"
-```
-
-For multi-server production, Docker-local image storage is not enough. Move product images to shared object storage before running multiple API containers.
-
-Do not run multiple API servers with separate local image folders, because product image URLs can point to files that exist on only one server.
+For production Cloudinary images, database backups preserve image URLs and Cloudinary public IDs. Cloudinary assets should be protected by Cloudinary account access and any client-required media backup/export process.
 
 ## Useful Docker Commands
 
@@ -729,7 +603,7 @@ Start database and Redis only:
 docker compose up -d postgres redis
 ```
 
-View running containers:
+View containers:
 
 ```powershell
 docker ps
@@ -759,13 +633,13 @@ Open Redis shell in production compose:
 docker exec -it springecom-redis redis-cli -a <REDIS_PASSWORD>
 ```
 
-Clear Redis cache in local compose:
+Clear Redis in local compose:
 
 ```powershell
 docker exec -it springecom-redis redis-cli FLUSHALL
 ```
 
-Clear Redis cache in production compose:
+Clear Redis in production compose:
 
 ```powershell
 docker exec -it springecom-redis redis-cli -a <REDIS_PASSWORD> FLUSHALL
@@ -776,57 +650,46 @@ docker exec -it springecom-redis redis-cli -a <REDIS_PASSWORD> FLUSHALL
 Before production delivery:
 
 - Rotate all real secrets.
-- Use strong `DB_PASSWORD` and `JWT_SECRET`.
-- Use strong `REDIS_PASSWORD` for the production compose stack.
+- Use strong `DB_PASSWORD`, `JWT_SECRET`, and `REDIS_PASSWORD`.
 - Do not commit `.env`.
-- Keep database and Redis ports private in production.
+- Keep database and Redis ports private.
 - Configure real frontend URL in `CORS_ORIGINS`.
-- Confirm with the client whether deployment is single-server or multi-server.
-- Use this Docker Compose setup for single-server production only.
-- For multi-server production, use managed PostgreSQL and shared object storage for product images.
-- Configure scheduled backups using `scripts/backup-production.ps1`.
-- Keep at least 14 days of backups, or more if the client requires it.
-- Store backups outside the application server when possible.
-- Test restore using `scripts/restore-production.ps1` before go-live.
-- Complete Razorpay KYC and payment method activation in the client's Razorpay account.
+- Configure trusted proxy IPs only in `RATE_LIMIT_TRUSTED_PROXIES`.
+- Use Cloudinary for production product image storage.
+- Keep Cloudinary credentials only in environment variables.
+- For multi-server production, use managed PostgreSQL or a dedicated database server.
+- For multi-server production, use shared Redis for cache, rate limiting, and scheduler locks.
+- Configure scheduled backups.
+- Test restore before go-live.
+- Complete Razorpay KYC and payment method activation.
 - Use live Razorpay keys only in production environment variables.
-- Confirm Razorpay refund permission is enabled before live automatic refunds.
+- Confirm Razorpay refund permission is enabled.
 - Ensure Razorpay account has enough balance or settlement support for refunds.
 - COD refunds must be handled manually by admin/business.
-- Back up PostgreSQL data regularly.
-- Store uploaded product images in persistent storage.
-- Keep schedulers on cron mode for production.
-- Confirm refund and exchange business rules with the client before enabling live operations.
+- Confirm refund and exchange business rules with the client.
 
 ## Final Delivery Verification
 
-Run these commands before sending the backend to the client:
+Run before sending backend to client:
 
 ```powershell
 git status
-.\mvnw.cmd clean test
+.\scripts\run-clean-tests.ps1
 docker compose config
 docker compose -f docker-compose.prod.yml config
-docker compose up --build
 ```
 
-In another PowerShell window, verify the running API:
+Verify running API:
 
 ```powershell
 Invoke-WebRequest http://localhost:8080/actuator/health -UseBasicParsing
 ```
 
-Expected result:
+Expected:
 
 ```text
 StatusCode: 200
 {"status":"UP"}
-```
-
-After verification, stop the local stack:
-
-```powershell
-docker compose down
 ```
 
 ## Client Delivery Checklist
@@ -835,37 +698,31 @@ Before sending to the client, confirm:
 
 - `git status` is clean.
 - GitHub Actions is green.
-- `.\mvnw.cmd clean test` passes.
-- `.\mvnw.cmd test "-Dtest=SecurityConfigTest"` passes.
-- `.\mvnw.cmd test "-Dtest=RateLimitFilterTest"` passes.
-- Docker starts with `docker compose up --build`.
+- Clean tests pass.
+- Docker compose config is valid.
+- Production compose config is valid.
 - Health check returns `UP`.
-- Swagger opens locally/admin-only if enabled, and is disabled in production.
+- Swagger is disabled in production.
 - No real secrets are committed.
 - `.env.example` is included.
 - Real `.env` is not committed.
 - Admin login has been tested.
 - User login has been tested.
-- Product image upload has been tested.
-- Cash on Delivery order placement has been tested with `USER` role.
-- Online payment test flow has been tested with `USER` role.
-- Admin cannot place orders through API.
-- Admin cannot use wishlist APIs.
-- Admin cannot use payment create/verify APIs.
-- User cannot access admin product APIs.
-- User cannot access admin return/exchange APIs.
-- Payment status updates to `PAID` after successful Razorpay verification.
-- Order placement and stock reduction have been tested.
-- Order status scheduler tests pass.
+- Product image upload has been tested in Cloudinary mode.
+- Cash on Delivery order placement has been tested.
+- Online payment test flow has been tested.
+- Admin cannot access user shopping APIs.
+- User cannot access admin APIs.
+- Payment status updates to `PAID` after Razorpay verification.
+- Order placement reduces stock.
+- Order scheduler tests pass.
 - Return/exchange request flow has been tested.
 - Return/exchange scheduler tests pass.
-- Online paid return refund flow has been tested with Razorpay test mode.
+- Online paid return refund flow has been tested in Razorpay test mode.
 - Refund failure behavior has been tested.
 - COD manual refund behavior has been confirmed.
 - Deployment scope has been confirmed with the client.
-- If single-server deployment is selected, Docker volumes and backups are configured.
-- If multi-server deployment is required, managed PostgreSQL and shared object storage are planned before go-live.
 - Production backup script has been tested.
 - Production restore script has been tested on staging.
-- Backup retention policy has been confirmed with the client.
-- Backup storage location has been confirmed with the client.
+- Backup retention policy has been confirmed.
+- Backup storage location has been confirmed.
