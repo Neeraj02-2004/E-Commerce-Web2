@@ -1,0 +1,2 @@
+ALTER TABLE product
+    ADD COLUMN IF NOT EXISTS image_public_id VARCHAR(500);

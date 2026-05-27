@@ -7,6 +7,7 @@ import com.neeraj.SpringEcom.model.Product;
 import com.neeraj.SpringEcom.model.dto.ProductRequest;
 import com.neeraj.SpringEcom.model.dto.ProductResponse;
 import com.neeraj.SpringEcom.service.ProductService;
+import com.neeraj.SpringEcom.service.storage.ProductImageResource;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Validator;
@@ -76,7 +77,7 @@ public class ProductController {
 
     @GetMapping("/product-images/{filename:.+}")
     public ResponseEntity<Resource> getProductImage(@PathVariable String filename) {
-        ProductService.ProductImageResource image = productService.loadProductImage(filename);
+        ProductImageResource image = productService.loadProductImage(filename);
 
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(image.contentType()))

@@ -1,19 +1,20 @@
 package com.neeraj.SpringEcom.service;
 
-import com.neeraj.SpringEcom.exception.FileStorageException;
 import com.neeraj.SpringEcom.exception.InvalidProductDataException;
 import com.neeraj.SpringEcom.exception.ProductNotFoundException;
 import com.neeraj.SpringEcom.model.Product;
 import com.neeraj.SpringEcom.repo.ProductRepo;
+import com.neeraj.SpringEcom.service.storage.LocalProductImageStorage;
+import com.neeraj.SpringEcom.service.storage.ProductImageResource;
+import com.neeraj.SpringEcom.service.storage.ProductImageStorage;
+import com.neeraj.SpringEcom.service.storage.StoredProductImage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.UrlResource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -23,14 +24,9 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.MalformedURLException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
 
 @Service
 public class ProductService {
@@ -45,14 +41,20 @@ public class ProductService {
     );
 
     private final ProductRepo productRepo;
-    private final Path imageUploadDir;
+    private final ProductImageStorage productImageStorage;
 
+    @Autowired
     public ProductService(
             ProductRepo productRepo,
-            @Value("${app.upload.product-images-dir:uploads/products}") String productImagesDir
+            ProductImageStorage productImageStorage
     ) {
         this.productRepo = productRepo;
-        this.imageUploadDir = Paths.get(productImagesDir).toAbsolutePath().normalize();
+        this.productImageStorage = productImageStorage;
+    }
+
+    public ProductService(ProductRepo productRepo, String productImagesDir) {
+        this.productRepo = productRepo;
+        this.productImageStorage = new LocalProductImageStorage(productImagesDir);
     }
 
     @Cacheable(value = "products")
@@ -83,10 +85,10 @@ public class ProductService {
 
         validateImageFile(imageFile, true);
 
-        Path newImagePath = applyImage(product, imageFile);
+        StoredProductImage storedImage = applyImage(product, imageFile);
 
-        if (newImagePath != null) {
-            deleteFileOnRollback(newImagePath);
+        if (storedImage != null) {
+            deleteImageOnRollback(storedImage.publicId());
         }
 
         Product saved = productRepo.save(product);
@@ -121,7 +123,7 @@ public class ProductService {
 
         validateImageFile(imageFile, false);
 
-        String oldImageUrl = existingProduct.getImageUrl();
+        String oldImagePublicId = existingProduct.getImagePublicId();
 
         existingProduct.setName(product.getName());
         existingProduct.setBrand(product.getBrand());
@@ -132,11 +134,11 @@ public class ProductService {
         existingProduct.setProductAvailable(product.isProductAvailable());
         existingProduct.setStockQuantity(product.getStockQuantity());
 
-        Path newImagePath = applyImage(existingProduct, imageFile);
+        StoredProductImage storedImage = applyImage(existingProduct, imageFile);
 
-        if (newImagePath != null) {
-            deleteFileOnRollback(newImagePath);
-            deleteOldImageAfterCommit(oldImageUrl, existingProduct.getImageUrl());
+        if (storedImage != null) {
+            deleteImageOnRollback(storedImage.publicId());
+            deleteOldImageAfterCommit(oldImagePublicId, existingProduct.getImagePublicId());
         }
 
         Product saved = productRepo.save(existingProduct);
@@ -188,40 +190,7 @@ public class ProductService {
     }
 
     public ProductImageResource loadProductImage(String filename) {
-        String cleanFilename = validateImageFilename(filename);
-
-        try {
-            Path imagePath = imageUploadDir.resolve(cleanFilename).normalize();
-
-            if (!imagePath.startsWith(imageUploadDir)
-                    || !Files.exists(imagePath)
-                    || !Files.isRegularFile(imagePath)) {
-                throw new ProductNotFoundException("Product image not found");
-            }
-
-            String contentType = Files.probeContentType(imagePath);
-
-            if (contentType == null || !contentType.startsWith("image/")) {
-                throw new InvalidProductDataException("Invalid image file type");
-            }
-
-            Resource resource = new UrlResource(imagePath.toUri());
-
-            if (!resource.exists() || !resource.isReadable()) {
-                throw new ProductNotFoundException("Product image not found");
-            }
-
-            return new ProductImageResource(
-                    resource,
-                    contentType,
-                    imagePath.getFileName().toString()
-            );
-
-        } catch (MalformedURLException e) {
-            throw new ProductNotFoundException("Product image not found");
-        } catch (IOException e) {
-            throw new ProductNotFoundException("Product image not found");
-        }
+        return productImageStorage.load(filename);
     }
 
     private String normalizeSearchKeyword(String keyword) {
@@ -236,20 +205,6 @@ public class ProductService {
         }
 
         return cleanKeyword;
-    }
-
-    private String validateImageFilename(String filename) {
-        if (filename == null || filename.isBlank()) {
-            throw new InvalidProductDataException("Invalid image filename");
-        }
-
-        String cleanFilename = StringUtils.cleanPath(filename);
-
-        if (cleanFilename.contains("/") || cleanFilename.contains("\\") || cleanFilename.contains("..")) {
-            throw new InvalidProductDataException("Invalid image filename");
-        }
-
-        return cleanFilename;
     }
 
     private void validateImageFile(MultipartFile imageFile, boolean required) {
@@ -283,44 +238,20 @@ public class ProductService {
         }
     }
 
-    private Path applyImage(Product product, MultipartFile imageFile) {
+    private StoredProductImage applyImage(Product product, MultipartFile imageFile) {
         if (imageFile == null || imageFile.isEmpty()) {
             return null;
         }
 
-        Path targetPath = null;
+        String detectedContentType = detectImageContentType(imageFile);
+        StoredProductImage storedImage = productImageStorage.store(imageFile, detectedContentType);
 
-        try {
-            Files.createDirectories(imageUploadDir);
+        product.setImageName(storedImage.originalFilename());
+        product.setImageType(storedImage.contentType());
+        product.setImageUrl(storedImage.imageUrl());
+        product.setImagePublicId(storedImage.publicId());
 
-            String originalFilename = StringUtils.cleanPath(imageFile.getOriginalFilename());
-            String detectedContentType = detectImageContentType(imageFile);
-            String extension = "";
-
-            int dotIndex = originalFilename.lastIndexOf(".");
-            if (dotIndex >= 0) {
-                extension = originalFilename.substring(dotIndex);
-            }
-
-            String storedFilename = UUID.randomUUID() + extension;
-            targetPath = imageUploadDir.resolve(storedFilename).normalize();
-
-            if (!targetPath.startsWith(imageUploadDir)) {
-                throw new FileStorageException("Invalid image path");
-            }
-
-            Files.copy(imageFile.getInputStream(), targetPath);
-
-            product.setImageName(originalFilename);
-            product.setImageType(detectedContentType);
-            product.setImageUrl("/api/product-images/" + storedFilename);
-
-            return targetPath;
-
-        } catch (IOException e) {
-            deleteFileQuietly(targetPath);
-            throw new FileStorageException("Image upload failed", e);
-        }
+        return storedImage;
     }
 
     private String detectImageContentType(MultipartFile imageFile) {
@@ -376,7 +307,7 @@ public class ProductService {
                 && header[11] == 0x50;
     }
 
-    private void deleteFileOnRollback(Path path) {
+    private void deleteImageOnRollback(String publicId) {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
             return;
         }
@@ -385,57 +316,28 @@ public class ProductService {
             @Override
             public void afterCompletion(int status) {
                 if (status == STATUS_ROLLED_BACK) {
-                    deleteFileQuietly(path);
+                    productImageStorage.delete(publicId);
                 }
             }
         });
     }
 
-    private void deleteOldImageAfterCommit(String oldImageUrl, String newImageUrl) {
-        if (oldImageUrl == null || oldImageUrl.isBlank() || oldImageUrl.equals(newImageUrl)) {
-            return;
-        }
-
-        Path oldImagePath = resolveImagePath(oldImageUrl);
-
-        if (oldImagePath == null) {
+    private void deleteOldImageAfterCommit(String oldImagePublicId, String newImagePublicId) {
+        if (oldImagePublicId == null || oldImagePublicId.isBlank() || oldImagePublicId.equals(newImagePublicId)) {
             return;
         }
 
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            deleteFileQuietly(oldImagePath);
+            productImageStorage.delete(oldImagePublicId);
             return;
         }
 
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                deleteFileQuietly(oldImagePath);
+                productImageStorage.delete(oldImagePublicId);
             }
         });
-    }
-
-    private Path resolveImagePath(String imageUrl) {
-        String filename = imageUrl.substring(imageUrl.lastIndexOf("/") + 1);
-        Path imagePath = imageUploadDir.resolve(filename).normalize();
-
-        if (!imagePath.startsWith(imageUploadDir)) {
-            return null;
-        }
-
-        return imagePath;
-    }
-
-    private void deleteFileQuietly(Path path) {
-        if (path == null) {
-            return;
-        }
-
-        try {
-            Files.deleteIfExists(path);
-        } catch (IOException e) {
-            logger.warn("Failed to delete image file: {}", path, e);
-        }
     }
 
     private String safeLogValue(String value) {
@@ -444,12 +346,5 @@ public class ProductService {
         }
 
         return value.trim();
-    }
-
-    public record ProductImageResource(
-            Resource resource,
-            String contentType,
-            String filename
-    ) {
     }
 }

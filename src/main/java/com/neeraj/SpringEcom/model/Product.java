@@ -50,4 +50,5 @@ public class Product {
     private String imageName;
     private String imageType;
     private String imageUrl;
+    private String imagePublicId;
 }

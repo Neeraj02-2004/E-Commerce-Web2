@@ -125,6 +125,14 @@
 			<version>1.4.8</version>
 		</dependency>
 
+
+		<!-- Cloudinary Image Storage -->
+		<dependency>
+			<groupId>com.cloudinary</groupId>
+			<artifactId>cloudinary-http44</artifactId>
+			<version>1.39.0</version>
+		</dependency>
+
 		<!-- Swagger / OpenAPI -->
 		<dependency>
 			<groupId>org.springdoc</groupId>
