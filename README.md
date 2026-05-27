@@ -105,6 +105,9 @@ Start the local backend stack:
 docker compose up --build
 ```
 
+Local Docker Compose runs the API with the `local` Spring profile so localhost
+frontend origins such as `http://localhost:5173` work during development.
+
 Start the production-style stack:
 
 ```powershell
@@ -114,6 +117,9 @@ docker compose -f docker-compose.prod.yml up --build -d
 The production compose file exposes only the API port. PostgreSQL and Redis stay private inside Docker.
 
 Production compose requires `REDIS_PASSWORD` and Cloudinary values in `.env`.
+Production compose uses the `prod` Spring profile and requires a real frontend
+domain in `CORS_ORIGINS`; localhost origins are intentionally rejected in
+production.
 
 API URL:
 

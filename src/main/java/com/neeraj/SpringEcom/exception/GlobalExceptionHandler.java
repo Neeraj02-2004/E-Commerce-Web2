@@ -11,10 +11,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
@@ -194,6 +194,16 @@ public class GlobalExceptionHandler {
         return error(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "Invalid request", request);
     }
 
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ApiError> handleResponseStatus(
+            ResponseStatusException e,
+            HttpServletRequest request
+    ) {
+        HttpStatus status = HttpStatus.valueOf(e.getStatusCode().value());
+        String message = e.getReason() != null ? e.getReason() : status.getReasonPhrase();
+
+        return error(status, "REQUEST_ERROR", message, request);
+    }
 
     @ExceptionHandler({
             AsyncRequestNotUsableException.class,
@@ -210,17 +220,6 @@ public class GlobalExceptionHandler {
                 requestId,
                 request.getRequestURI()
         );
-    }
-
-    @ExceptionHandler(ResponseStatusException.class)
-    public ResponseEntity<ApiError> handleResponseStatus(
-            ResponseStatusException e,
-            HttpServletRequest request
-    ) {
-        HttpStatus status = HttpStatus.valueOf(e.getStatusCode().value());
-        String message = e.getReason() != null ? e.getReason() : status.getReasonPhrase();
-
-        return error(status, "REQUEST_ERROR", message, request);
     }
 
     @ExceptionHandler(Exception.class)

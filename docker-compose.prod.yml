@@ -36,7 +36,8 @@ services:
       dockerfile: Dockerfile
     container_name: springecom-api
     env_file:
-      - .env
+      - path: .env
+        required: false
     depends_on:
       postgres:
         condition: service_healthy

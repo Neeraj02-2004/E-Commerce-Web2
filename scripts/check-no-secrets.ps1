@@ -35,7 +35,29 @@ $patterns = @(
     }
 )
 
-$files = git ls-files --cached --others --exclude-standard
+$isGitRepository = $false
+
+try {
+    git rev-parse --is-inside-work-tree *> $null
+    $isGitRepository = $LASTEXITCODE -eq 0
+} catch {
+    $isGitRepository = $false
+}
+
+if ($isGitRepository) {
+    $files = git ls-files --cached --others --exclude-standard
+} else {
+    $files = Get-ChildItem -Recurse -File -Force |
+        Where-Object {
+            ($_.FullName -notmatch "\\.git\\") `
+                -and ($_.FullName -notmatch "\\target\\") `
+                -and ($_.FullName -notmatch "\\uploads\\") `
+                -and ($_.FullName -notmatch "\\backups\\")
+        } |
+        ForEach-Object {
+            Resolve-Path -LiteralPath $_.FullName -Relative
+        }
+}
 
 $ignoredExtensions = @(
     ".jar", ".class", ".png", ".jpg", ".jpeg", ".webp", ".gif",
