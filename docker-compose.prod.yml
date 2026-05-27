@@ -48,14 +48,11 @@ services:
       DB_USERNAME: springecom
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      PRODUCT_IMAGES_DIR: /app/uploads/products
+      STORAGE_TYPE: cloudinary
     ports:
       - "8080:8080"
-    volumes:
-      - springecom-product-images:/app/uploads/products
     restart: unless-stopped
 
 volumes:
   springecom-postgres-data:
   springecom-redis-data:
-  springecom-product-images:
