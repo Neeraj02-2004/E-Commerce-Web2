@@ -143,6 +143,27 @@ class PaymentServiceWebhookTest {
     }
 
     @Test
+    void handleRazorpayWebhook_whenSignedPayloadIsMalformed_shouldIgnoreCleanly() throws Exception {
+        OrderRepo orderRepo = mock(OrderRepo.class);
+        ReturnExchangeRepo returnExchangeRepo = mock(ReturnExchangeRepo.class);
+        RazorpayWebhookEventRepo webhookEventRepo = mock(RazorpayWebhookEventRepo.class);
+
+        when(webhookEventRepo.existsByEventId("evt_malformed_payload")).thenReturn(false);
+        when(webhookEventRepo.saveAndFlush(any(RazorpayWebhookEvent.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        PaymentService service = paymentService(orderRepo, returnExchangeRepo, webhookEventRepo);
+
+        service.handleRazorpayWebhook(
+                malformedPaymentCapturedPayload(),
+                signatureFor(malformedPaymentCapturedPayload())
+        );
+
+        verify(webhookEventRepo).saveAndFlush(any(RazorpayWebhookEvent.class));
+        verifyNoInteractions(orderRepo, returnExchangeRepo);
+    }
+
+    @Test
     void handleRazorpayWebhook_refundProcessed_shouldMarkReturnExchangeRefundedAndCompleted() throws Exception {
         OrderRepo orderRepo = mock(OrderRepo.class);
         ReturnExchangeRepo returnExchangeRepo = mock(ReturnExchangeRepo.class);
@@ -282,6 +303,16 @@ class PaymentServiceWebhookTest {
                       }
                     }
                   }
+                }
+                """;
+    }
+
+    private static String malformedPaymentCapturedPayload() {
+        return """
+                {
+                  "id": "evt_malformed_payload",
+                  "event": "payment.captured",
+                  "payload": {}
                 }
                 """;
     }

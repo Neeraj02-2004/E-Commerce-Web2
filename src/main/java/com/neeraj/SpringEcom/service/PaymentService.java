@@ -274,6 +274,12 @@ public class PaymentService {
 
     private void handlePaymentCaptured(JSONObject event) {
         JSONObject payment = getPayloadEntity(event, "payment");
+
+        if (payment == null) {
+            log.warn("Ignoring Razorpay payment.captured webhook with missing payment entity");
+            return;
+        }
+
         String gatewayOrderId = payment.optString("order_id", null);
         String gatewayPaymentId = payment.optString("id", null);
 
@@ -292,6 +298,12 @@ public class PaymentService {
 
     private void handlePaymentFailed(JSONObject event) {
         JSONObject payment = getPayloadEntity(event, "payment");
+
+        if (payment == null) {
+            log.warn("Ignoring Razorpay payment.failed webhook with missing payment entity");
+            return;
+        }
+
         String gatewayOrderId = payment.optString("order_id", null);
         String gatewayPaymentId = payment.optString("id", null);
 
@@ -311,6 +323,12 @@ public class PaymentService {
 
     private void handleRefundProcessing(JSONObject event) {
         JSONObject refund = getPayloadEntity(event, "refund");
+
+        if (refund == null) {
+            log.warn("Ignoring Razorpay refund processing webhook with missing refund entity");
+            return;
+        }
+
         String gatewayRefundId = refund.optString("id", null);
 
         if (gatewayRefundId == null || gatewayRefundId.isBlank()) {
@@ -326,6 +344,12 @@ public class PaymentService {
 
     private void handleRefundProcessed(JSONObject event) {
         JSONObject refund = getPayloadEntity(event, "refund");
+
+        if (refund == null) {
+            log.warn("Ignoring Razorpay refund.processed webhook with missing refund entity");
+            return;
+        }
+
         String gatewayRefundId = refund.optString("id", null);
 
         if (gatewayRefundId == null || gatewayRefundId.isBlank()) {
@@ -344,6 +368,12 @@ public class PaymentService {
 
     private void handleRefundFailed(JSONObject event) {
         JSONObject refund = getPayloadEntity(event, "refund");
+
+        if (refund == null) {
+            log.warn("Ignoring Razorpay refund.failed webhook with missing refund entity");
+            return;
+        }
+
         String gatewayRefundId = refund.optString("id", null);
 
         if (gatewayRefundId == null || gatewayRefundId.isBlank()) {
@@ -358,10 +388,19 @@ public class PaymentService {
     }
 
     private JSONObject getPayloadEntity(JSONObject event, String entityName) {
-        return event
-                .optJSONObject("payload")
-                .optJSONObject(entityName)
-                .optJSONObject("entity");
+        JSONObject payload = event.optJSONObject("payload");
+
+        if (payload == null) {
+            return null;
+        }
+
+        JSONObject typedPayload = payload.optJSONObject(entityName);
+
+        if (typedPayload == null) {
+            return null;
+        }
+
+        return typedPayload.optJSONObject("entity");
     }
 
     private void validateRefundRequest(Order order, String idempotencyKey) {

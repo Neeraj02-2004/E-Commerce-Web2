@@ -5,6 +5,8 @@ import com.razorpay.RazorpayClient;
 import com.razorpay.Refund;
 import com.razorpay.Utils;
 import org.json.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -14,6 +16,7 @@ import java.util.Optional;
 @Component
 public class RazorpayGatewayImpl implements RazorpayGateway {
 
+    private static final Logger log = LoggerFactory.getLogger(RazorpayGatewayImpl.class);
     private static final String REFUND_IDEMPOTENCY_NOTE_KEY = "idem_key";
 
     private final RazorpayClient razorpayClient;
@@ -29,6 +32,8 @@ public class RazorpayGatewayImpl implements RazorpayGateway {
 
     @Override
     public GatewayOrder createOrder(long amountInPaise, String currency, String receipt) {
+        long start = System.currentTimeMillis();
+
         try {
             JSONObject options = new JSONObject();
             options.put("amount", amountInPaise);
@@ -40,6 +45,8 @@ public class RazorpayGatewayImpl implements RazorpayGateway {
             return new GatewayOrder(razorpayOrder.get("id"));
         } catch (Exception e) {
             throw new InvalidOrderException("Unable to create payment order");
+        } finally {
+            log.info("Razorpay create order took {} ms for receipt {}", elapsedMillis(start), receipt);
         }
     }
 
@@ -68,6 +75,8 @@ public class RazorpayGatewayImpl implements RazorpayGateway {
             String refundReceipt,
             String idempotencyKey
     ) {
+        long start = System.currentTimeMillis();
+
         try {
             JSONObject options = new JSONObject();
             options.put("amount", amountInPaise);
@@ -83,6 +92,8 @@ public class RazorpayGatewayImpl implements RazorpayGateway {
             return new GatewayRefund(refund.get("id"), getRefundAmountInPaise(refund));
         } catch (Exception e) {
             throw new InvalidOrderException("Unable to process Razorpay refund");
+        } finally {
+            log.info("Razorpay create refund took {} ms for receipt {}", elapsedMillis(start), refundReceipt);
         }
     }
 
@@ -92,6 +103,8 @@ public class RazorpayGatewayImpl implements RazorpayGateway {
             String idempotencyKey,
             long amountInPaise
     ) {
+        long start = System.currentTimeMillis();
+
         try {
             List<Refund> refunds = razorpayClient.payments.fetchAllRefunds(paymentId);
 
@@ -102,6 +115,8 @@ public class RazorpayGatewayImpl implements RazorpayGateway {
                     .map(refund -> new GatewayRefund(refund.get("id"), getRefundAmountInPaise(refund)));
         } catch (Exception e) {
             return Optional.empty();
+        } finally {
+            log.info("Razorpay fetch refunds took {} ms", elapsedMillis(start));
         }
     }
 
@@ -127,5 +142,9 @@ public class RazorpayGatewayImpl implements RazorpayGateway {
         }
 
         throw new InvalidOrderException("Razorpay refund amount is missing");
+    }
+
+    private long elapsedMillis(long start) {
+        return System.currentTimeMillis() - start;
     }
 }

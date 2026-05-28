@@ -7,6 +7,7 @@ import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 
 @Component
@@ -52,7 +53,18 @@ public class ProdEnvironmentValidator implements ApplicationRunner {
         String jwtSecret = environment.getProperty("app.jwt.secret");
 
         if (isBlank(jwtSecret) || isPlaceholder(jwtSecret) || jwtSecret.length() < 32) {
-            errors.add("JWT_SECRET must be a real high-entropy secret with at least 32 characters.");
+            errors.add("JWT_SECRET must be a real Base64-encoded high-entropy secret.");
+            return;
+        }
+
+        try {
+            byte[] decodedSecret = Base64.getDecoder().decode(jwtSecret);
+
+            if (decodedSecret.length < 32) {
+                errors.add("JWT_SECRET must decode to at least 32 bytes.");
+            }
+        } catch (IllegalArgumentException e) {
+            errors.add("JWT_SECRET must be valid Base64.");
         }
     }
 

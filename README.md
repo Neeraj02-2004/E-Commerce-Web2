@@ -70,6 +70,7 @@ Important:
 
 - Never commit the real `.env` file.
 - Never commit real Cloudinary, Razorpay, Google, database, Redis, or JWT secrets.
+- `JWT_SECRET` must be valid Base64 and decode to at least 32 bytes for production.
 - For production, set `STORAGE_TYPE=cloudinary`.
 - If any real secret was exposed during development, rotate it before production.
 
@@ -162,7 +163,7 @@ Recommended Windows clean test command for this project:
 Latest verified result:
 
 ```text
-Tests run: 127, Failures: 0, Errors: 0, Skipped: 1
+Tests run: 131, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
@@ -304,6 +305,8 @@ CLOUDINARY_FOLDER=springecom/products
 
 In Cloudinary mode, product image URLs are stored as Cloudinary HTTPS URLs, so multiple API servers can serve the same product images without sharing a local upload folder.
 
+Cloudinary upload and delete calls log elapsed time, which helps diagnose slow admin product image operations.
+
 The production Docker Compose file sets:
 
 ```env
@@ -346,6 +349,12 @@ Public endpoint:
 
 - `POST /api/payments/webhook`
 
+Webhook safety:
+
+- Webhook signatures are verified before processing.
+- Duplicate webhook events are ignored using stored Razorpay event IDs.
+- Malformed signed webhook payloads are ignored cleanly instead of causing server errors.
+
 Online payment flow:
 
 1. User places an order with payment mode `ONLINE`.
@@ -358,6 +367,8 @@ Online payment flow:
 8. Backend updates payment status to `PAID`.
 
 For client/live deployment, Razorpay KYC and payment method activation must be completed in the client's Razorpay business account.
+
+Razorpay external calls log elapsed time for order creation, refund creation, and refund lookup. Use API logs to separate backend delay from Razorpay gateway delay during client testing.
 
 ## Razorpay Refund Support
 
@@ -656,7 +667,7 @@ docker exec -it springecom-redis redis-cli -a <REDIS_PASSWORD> FLUSHALL
 Before production delivery:
 
 - Rotate all real secrets.
-- Use strong `DB_PASSWORD`, `JWT_SECRET`, and `REDIS_PASSWORD`.
+- Use strong `DB_PASSWORD`, `REDIS_PASSWORD`, and a Base64 `JWT_SECRET` that decodes to at least 32 bytes.
 - Do not commit `.env`.
 - Keep database and Redis ports private.
 - Configure real frontend URL in `CORS_ORIGINS`.
