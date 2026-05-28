@@ -125,7 +125,6 @@
 			<version>1.4.8</version>
 		</dependency>
 
-
 		<!-- Cloudinary Image Storage -->
 		<dependency>
 			<groupId>com.cloudinary</groupId>
@@ -139,7 +138,6 @@
 			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
 			<version>2.6.0</version>
 		</dependency>
-
 
 		<!-- Lombok -->
 		<dependency>
@@ -224,6 +222,17 @@
 						</path>
 					</annotationProcessorPaths>
 				</configuration>
+				<executions>
+					<execution>
+						<id>default-testCompile</id>
+						<configuration>
+							<compileSourceRoots>
+								<compileSourceRoot>${project.basedir}/src/main/java</compileSourceRoot>
+								<compileSourceRoot>${project.basedir}/src/test/java</compileSourceRoot>
+							</compileSourceRoots>
+						</configuration>
+					</execution>
+				</executions>
 			</plugin>
 
 			<plugin>

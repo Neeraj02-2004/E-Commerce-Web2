@@ -16,6 +16,8 @@ uploads/
 ### JVM crash logs ###
 hs_err_pid*.log
 replay_pid*.log
+*.class
+maven-debug.log
 
 ### STS ###
 .apt_generated

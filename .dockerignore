@@ -8,3 +8,5 @@ uploads
 .env.*
 !/.env.example
 hs_err_pid*.log
+*.class
+maven-debug.log
