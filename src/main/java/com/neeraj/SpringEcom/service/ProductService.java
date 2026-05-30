@@ -21,7 +21,10 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
-
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
@@ -61,6 +64,19 @@ public class ProductService {
     public List<Product> getAllProducts() {
         logger.info("Fetching all products from DB");
         return productRepo.findAll();
+    }
+
+    @Cacheable(value = "products", key = "'page:' + #page + ':size:' + #size")
+    public Page<Product> getProducts(int page, int size) {
+        logger.info("Fetching products page: {}, size: {}", page, size);
+
+        Pageable pageable = PageRequest.of(
+                page,
+                size,
+                Sort.by(Sort.Direction.DESC, "id")
+        );
+
+        return productRepo.findAll(pageable);
     }
 
     @Cacheable(value = "product", key = "#id", unless = "#result == null")

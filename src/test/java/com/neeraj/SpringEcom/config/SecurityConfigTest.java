@@ -17,6 +17,8 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.cache.CacheManager;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.http.MediaType;
@@ -30,6 +32,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doNothing;
@@ -113,7 +116,8 @@ class SecurityConfigTest {
 
     @Test
     void publicProductEndpoints_shouldAllowAnonymous() throws Exception {
-        when(productService.getAllProducts()).thenReturn(List.of());
+        when(productService.getProducts(anyInt(), anyInt()))
+                .thenReturn(Page.empty(PageRequest.of(0, 20)));
         when(productService.searchProducts("phone")).thenReturn(List.of());
 
         mockMvc.perform(get("/api/products"))

@@ -1,6 +1,6 @@
 ﻿# SpringEcom Backend
 
-SpringEcom is a Spring Boot ecommerce backend API with JWT authentication, Google login, role-based access control, product management, order placement, Razorpay payment/refund support, return/exchange handling, wishlist, PostgreSQL, Redis cache, Redis-backed rate limiting, Redis scheduler locks, Flyway migrations, Docker Compose, health checks, Cloudinary product image storage, scheduled automation, and Swagger API documentation.
+SpringEcom is a Spring Boot ecommerce backend API with JWT authentication, Google login, role-based access control, product management, paginated product listing, order placement, Razorpay payment/refund support, return/exchange handling, wishlist, PostgreSQL, Redis cache, Redis-backed rate limiting, Redis scheduler locks, Flyway migrations, Docker Compose, health checks, Cloudinary product image storage, scheduled automation, and Swagger API documentation.
 
 ## Tech Stack
 
@@ -106,8 +106,7 @@ Start the local backend stack:
 docker compose up --build
 ```
 
-Local Docker Compose runs the API with the `local` Spring profile so localhost
-frontend origins such as `http://localhost:5173` work during development.
+Local Docker Compose runs the API with the `local` Spring profile so localhost frontend origins such as `http://localhost:5173` work during development.
 
 Start the production-style stack:
 
@@ -118,9 +117,8 @@ docker compose -f docker-compose.prod.yml up --build -d
 The production compose file exposes only the API port. PostgreSQL and Redis stay private inside Docker.
 
 Production compose requires `REDIS_PASSWORD` and Cloudinary values in `.env`.
-Production compose uses the `prod` Spring profile and requires a real frontend
-domain in `CORS_ORIGINS`; localhost origins are intentionally rejected in
-production.
+
+Production compose uses the `prod` Spring profile and requires a real frontend domain in `CORS_ORIGINS`; localhost origins are intentionally rejected in production.
 
 API URL:
 
@@ -158,6 +156,12 @@ Recommended Windows clean test command for this project:
 
 ```powershell
 .\scripts\run-clean-tests.ps1
+```
+
+Run product pagination and security tests:
+
+```powershell
+.\mvnw.cmd test "-Dtest=ProductControllerPaginationTest,SecurityConfigTest"
 ```
 
 Latest verified result:
@@ -248,7 +252,7 @@ After changing role, log out and log in again to get a new JWT token.
 
 Public endpoints:
 
-- `GET /api/products`
+- `GET /api/products?page=0&size=20`
 - `GET /api/product/{id}`
 - `GET /api/products/search?keyword=phone`
 - `GET /api/product-images/{filename}`
@@ -258,6 +262,53 @@ Admin-only endpoints:
 - `POST /api/admin/product`
 - `PUT /api/admin/product/{id}`
 - `DELETE /api/admin/product/{id}`
+
+Product listing is paginated to keep large catalogs fast and frontend-friendly.
+
+Default pagination values:
+
+- `page`: `0`
+- `size`: `20`
+- Maximum `size`: `100`
+
+Example product list request:
+
+```http
+GET /api/products?page=0&size=20
+```
+
+Example product list response:
+
+```json
+{
+  "content": [
+    {
+      "id": 10,
+      "name": "Samsung 55 Inch",
+      "description": "Large 4K smart TV",
+      "brand": "Samsung",
+      "price": 47000.00,
+      "category": "Electronics",
+      "releaseDate": "2026-05-24",
+      "productAvailable": true,
+      "stockQuantity": 8,
+      "imageName": "tv.png",
+      "imageType": "image/png",
+      "imageUrl": "/api/product-images/tv.png"
+    }
+  ],
+  "page": 0,
+  "size": 20,
+  "totalPages": 1,
+  "totalElements": 1
+}
+```
+
+Frontend should read products from:
+
+```js
+const products = response.content;
+```
 
 Admin product create/update uses multipart form data:
 
@@ -535,6 +586,12 @@ Security test command:
 .\mvnw.cmd test "-Dtest=SecurityConfigTest"
 ```
 
+Product pagination test command:
+
+```powershell
+.\mvnw.cmd test "-Dtest=ProductControllerPaginationTest"
+```
+
 Rate limit test command:
 
 ```powershell
@@ -700,6 +757,7 @@ Verify running API:
 
 ```powershell
 Invoke-WebRequest http://localhost:8080/actuator/health -UseBasicParsing
+Invoke-WebRequest "http://localhost:8080/api/products?page=0&size=20" -UseBasicParsing
 ```
 
 Expected:
@@ -707,6 +765,18 @@ Expected:
 ```text
 StatusCode: 200
 {"status":"UP"}
+```
+
+For product listing, expected response format:
+
+```json
+{
+  "content": [],
+  "page": 0,
+  "size": 20,
+  "totalPages": 0,
+  "totalElements": 0
+}
 ```
 
 ## Client Delivery Checklist
@@ -719,6 +789,7 @@ Before sending to the client, confirm:
 - Docker compose config is valid.
 - Production compose config is valid.
 - Health check returns `UP`.
+- Paginated product listing works with `GET /api/products?page=0&size=20`.
 - Swagger is disabled in production.
 - No real secrets are committed.
 - `.env.example` is included.

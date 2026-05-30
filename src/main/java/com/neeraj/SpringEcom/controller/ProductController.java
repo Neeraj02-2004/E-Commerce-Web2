@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.neeraj.SpringEcom.exception.InvalidProductDataException;
 import com.neeraj.SpringEcom.exception.ProductNotFoundException;
 import com.neeraj.SpringEcom.model.Product;
+import com.neeraj.SpringEcom.model.dto.PageResponse;
 import com.neeraj.SpringEcom.model.dto.ProductRequest;
 import com.neeraj.SpringEcom.model.dto.ProductResponse;
 import com.neeraj.SpringEcom.service.ProductService;
@@ -11,6 +12,7 @@ import com.neeraj.SpringEcom.service.storage.ProductImageResource;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Validator;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.core.io.Resource;
@@ -31,6 +33,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.data.domain.Page;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -58,13 +61,24 @@ public class ProductController {
     }
 
     @GetMapping("/products")
-    public ResponseEntity<List<ProductResponse>> getProducts() {
-        List<ProductResponse> products = productService.getAllProducts()
+    public ResponseEntity<PageResponse<ProductResponse>> getProducts(
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size
+    ) {
+        Page<Product> products = productService.getProducts(page, size);
+
+        List<ProductResponse> content = products.getContent()
                 .stream()
                 .map(this::toProductResponse)
                 .toList();
 
-        return ResponseEntity.ok(products);
+        return ResponseEntity.ok(new PageResponse<>(
+                content,
+                products.getNumber(),
+                products.getSize(),
+                products.getTotalPages(),
+                products.getTotalElements()
+        ));
     }
 
     @GetMapping("/product/{id}")
