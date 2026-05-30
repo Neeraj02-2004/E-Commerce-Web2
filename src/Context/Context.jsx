@@ -135,8 +135,13 @@ export const AppProvider = ({ children }) => {
 
   const refreshData = async () => {
     try {
-      const response = await axios.get("/products");
-      setData([...response.data]);
+      const response = await axios.get("/products?page=0&size=20");
+
+      const products = Array.isArray(response.data)
+        ? response.data
+        : response.data?.content || [];
+
+      setData(products);
       setIsError("");
     } catch (error) {
       setIsError(error.message);

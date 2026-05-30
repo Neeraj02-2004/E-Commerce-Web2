@@ -41,9 +41,17 @@ const Home = ({ selectedCategory }) => {
   }, [refreshData, isDataFetched]);
 
   useEffect(() => {
-    if (data && data.length > 0) {
+    if (Array.isArray(data)) {
       setProducts(data);
+      return;
     }
+
+    if (data?.content && Array.isArray(data.content)) {
+      setProducts(data.content);
+      return;
+    }
+
+    setProducts([]);
   }, [data]);
 
   const getImageUrl = (product) => {
