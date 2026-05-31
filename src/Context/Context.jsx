@@ -133,15 +133,14 @@ export const AppProvider = ({ children }) => {
     localStorage.removeItem(cartKey);
   };
 
-  const refreshData = async () => {
+  // ✅ UPDATED ONLY THIS METHOD FOR PAGINATION
+  const refreshData = async (page = 0, size = 20) => {
     try {
-      const response = await axios.get("/products?page=0&size=20");
+      const response = await axios.get(`/products?page=${page}&size=${size}`);
 
-      const products = Array.isArray(response.data)
-        ? response.data
-        : response.data?.content || [];
+      // ✅ Store full response because Home.jsx needs content + totalPages
+      setData(response.data);
 
-      setData(products);
       setIsError("");
     } catch (error) {
       setIsError(error.message);
@@ -149,7 +148,7 @@ export const AppProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    refreshData();
+    refreshData(0, 20);
     refreshAuth();
   }, []);
 

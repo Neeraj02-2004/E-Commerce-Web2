@@ -9,6 +9,12 @@ const Home = ({ selectedCategory }) => {
   const { data, isError, addToCart, refreshData } = useContext(AppContext);
   const [products, setProducts] = useState([]);
   const [isDataFetched, setIsDataFetched] = useState(false);
+
+  // ✅ ADDED FOR PAGINATION
+  const [page, setPage] = useState(0);
+  const [size] = useState(20);
+  const [totalPages, setTotalPages] = useState(1);
+
   const [popup, setPopup] = useState({
     show: false,
     message: "",
@@ -35,23 +41,33 @@ const Home = ({ selectedCategory }) => {
 
   useEffect(() => {
     if (!isDataFetched) {
-      refreshData();
+      refreshData(page, size);
       setIsDataFetched(true);
     }
-  }, [refreshData, isDataFetched]);
+  }, [refreshData, isDataFetched, page, size]);
+
+  // ✅ ADDED: fetch data again when page changes
+  useEffect(() => {
+    if (isDataFetched) {
+      refreshData(page, size);
+    }
+  }, [page, size]);
 
   useEffect(() => {
     if (Array.isArray(data)) {
       setProducts(data);
+      setTotalPages(1);
       return;
     }
 
     if (data?.content && Array.isArray(data.content)) {
       setProducts(data.content);
+      setTotalPages(data.totalPages || 1);
       return;
     }
 
     setProducts([]);
+    setTotalPages(1);
   }, [data]);
 
   const getImageUrl = (product) => {
@@ -237,8 +253,40 @@ const Home = ({ selectedCategory }) => {
           })
         )}
       </div>
+
+      {/* ✅ ADDED PAGINATION BUTTONS */}
+      <div style={paginationStyle}>
+        <button
+          className="btn btn-dark"
+          disabled={page === 0}
+          onClick={() => setPage((prev) => prev - 1)}
+        >
+          Previous
+        </button>
+
+        <span style={{ fontWeight: "600" }}>
+          Page {page + 1} of {totalPages}
+        </span>
+
+        <button
+          className="btn btn-dark"
+          disabled={page + 1 >= totalPages}
+          onClick={() => setPage((prev) => prev + 1)}
+        >
+          Next
+        </button>
+      </div>
     </>
   );
+};
+
+// ✅ ADDED
+const paginationStyle = {
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  gap: "20px",
+  margin: "20px 0 40px",
 };
 
 const popupStyle = (type) => ({
