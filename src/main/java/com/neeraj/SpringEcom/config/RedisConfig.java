@@ -3,6 +3,7 @@ package com.neeraj.SpringEcom.config;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.neeraj.SpringEcom.model.Product;
+import com.neeraj.SpringEcom.model.dto.ProductPageResponse;
 import com.neeraj.SpringEcom.model.dto.WishlistResponse;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
@@ -49,6 +50,9 @@ public class RedisConfig {
         Jackson2JsonRedisSerializer<List<Product>> productListSerializer =
                 new Jackson2JsonRedisSerializer<>(objectMapper, productListType);
 
+        Jackson2JsonRedisSerializer<ProductPageResponse> productPageCacheSerializer =
+                new Jackson2JsonRedisSerializer<>(objectMapper, ProductPageResponse.class);
+
         Jackson2JsonRedisSerializer<List<WishlistResponse>> wishlistListSerializer =
                 new Jackson2JsonRedisSerializer<>(objectMapper, wishlistListType);
 
@@ -65,6 +69,11 @@ public class RedisConfig {
         cacheConfigurations.put(
                 "products",
                 cacheConfig(Duration.ofMinutes(10), productListSerializer)
+        );
+
+        cacheConfigurations.put(
+                "productsPage",
+                cacheConfig(Duration.ofMinutes(10), productPageCacheSerializer)
         );
 
         cacheConfigurations.put(

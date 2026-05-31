@@ -3,6 +3,7 @@ package com.neeraj.SpringEcom.service;
 import com.neeraj.SpringEcom.exception.InvalidProductDataException;
 import com.neeraj.SpringEcom.exception.ProductNotFoundException;
 import com.neeraj.SpringEcom.model.Product;
+import com.neeraj.SpringEcom.model.dto.ProductPageResponse;
 import com.neeraj.SpringEcom.repo.ProductRepo;
 import com.neeraj.SpringEcom.service.storage.LocalProductImageStorage;
 import com.neeraj.SpringEcom.service.storage.ProductImageResource;
@@ -11,20 +12,24 @@ import com.neeraj.SpringEcom.service.storage.StoredProductImage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
@@ -37,6 +42,7 @@ public class ProductService {
     private static final Logger logger = LoggerFactory.getLogger(ProductService.class);
 
     private static final long MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
+
     private static final Set<String> ALLOWED_IMAGE_TYPES = Set.of(
             "image/jpeg",
             "image/png",
@@ -45,19 +51,23 @@ public class ProductService {
 
     private final ProductRepo productRepo;
     private final ProductImageStorage productImageStorage;
+    private final CacheManager cacheManager;
 
     @Autowired
     public ProductService(
             ProductRepo productRepo,
-            ProductImageStorage productImageStorage
+            ProductImageStorage productImageStorage,
+            CacheManager cacheManager
     ) {
         this.productRepo = productRepo;
         this.productImageStorage = productImageStorage;
+        this.cacheManager = cacheManager;
     }
 
     public ProductService(ProductRepo productRepo, String productImagesDir) {
         this.productRepo = productRepo;
         this.productImageStorage = new LocalProductImageStorage(productImagesDir);
+        this.cacheManager = null;
     }
 
     @Cacheable(value = "products")
@@ -66,9 +76,36 @@ public class ProductService {
         return productRepo.findAll();
     }
 
-    @Cacheable(value = "products", key = "'page:' + #page + ':size:' + #size")
     public Page<Product> getProducts(int page, int size) {
-        logger.info("Fetching products page: {}, size: {}", page, size);
+        String cacheKey = "page:" + page + ":size:" + size;
+
+        Cache cache = null;
+
+        if (cacheManager != null) {
+            cache = cacheManager.getCache("productsPage");
+        }
+
+        if (cache != null) {
+            ProductPageResponse response = cache.get(cacheKey, ProductPageResponse.class);
+
+            if (response != null) {
+                logger.info("Fetching products page from Redis cache: {}, size: {}", page, size);
+
+                Pageable pageable = PageRequest.of(
+                        response.getPage(),
+                        response.getSize(),
+                        Sort.by(Sort.Direction.DESC, "id")
+                );
+
+                return new PageImpl<>(
+                        response.getContent(),
+                        pageable,
+                        response.getTotalElements()
+                );
+            }
+        }
+
+        logger.info("Fetching products page from DB: {}, size: {}", page, size);
 
         Pageable pageable = PageRequest.of(
                 page,
@@ -76,7 +113,20 @@ public class ProductService {
                 Sort.by(Sort.Direction.DESC, "id")
         );
 
-        return productRepo.findAll(pageable);
+        Page<Product> productPage = productRepo.findAll(pageable);
+
+        ProductPageResponse productPageResponse = new ProductPageResponse(
+                productPage.getContent(),
+                page,
+                size,
+                productPage.getTotalElements()
+        );
+
+        if (cache != null) {
+            cache.put(cacheKey, productPageResponse);
+        }
+
+        return productPage;
     }
 
     @Cacheable(value = "product", key = "#id", unless = "#result == null")
@@ -89,7 +139,8 @@ public class ProductService {
     @Caching(
             put = @CachePut(value = "product", key = "#result.id"),
             evict = {
-                    @CacheEvict(value = "products", allEntries = true)
+                    @CacheEvict(value = "products", allEntries = true),
+                    @CacheEvict(value = "productsPage", allEntries = true)
             }
     )
     public Product addProduct(Product product, MultipartFile imageFile) {
@@ -123,7 +174,8 @@ public class ProductService {
     @Caching(
             put = @CachePut(value = "product", key = "#result.id"),
             evict = {
-                    @CacheEvict(value = "products", allEntries = true)
+                    @CacheEvict(value = "products", allEntries = true),
+                    @CacheEvict(value = "productsPage", allEntries = true)
             }
     )
     public Product updateProduct(Long id, Product product, MultipartFile imageFile) {
@@ -172,7 +224,8 @@ public class ProductService {
     @Transactional
     @Caching(evict = {
             @CacheEvict(value = "product", key = "#id"),
-            @CacheEvict(value = "products", allEntries = true)
+            @CacheEvict(value = "products", allEntries = true),
+            @CacheEvict(value = "productsPage", allEntries = true)
     })
     public void deleteProduct(Long id) {
         Product product = productRepo.findById(id)
